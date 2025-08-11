@@ -13,6 +13,25 @@ The OpenAI Agents SDK enables building production-ready agentic AI applications 
 - **Sessions**: Automatic conversation history management
 - **Streaming**: Real-time progress monitoring
 
+### Latest Model Capabilities (August 2025)
+
+#### GPT-5 Series for Engineering
+- **gpt-5**: PhD-level expertise for complex architectural decisions
+- **gpt-5-mini**: 80% performance at 20% cost for production workflows
+- **gpt-5-nano**: Ultra-fast responses for CI/CD and edge deployment
+- **400K Context**: Process entire codebases in single conversations
+
+#### GPT-OSS for Local Development
+- **gpt-oss:20b**: Consumer hardware optimization (16GB+ VRAM)
+- **gpt-oss:120b**: High-performance local deployment (80GB+ VRAM)
+- **Apache 2.0 License**: Free for commercial use
+- **131K Context**: Extended reasoning for complex engineering tasks
+
+#### Claude 4 for Research
+- **200K Context**: Comprehensive codebase analysis
+- **Enhanced Reasoning**: Multi-step problem solving
+- **Long-Horizon Tasks**: Extended engineering workflows
+
 ## Installation and Setup
 
 ```bash
