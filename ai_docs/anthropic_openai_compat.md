@@ -22,6 +22,8 @@ print(response.choices[0].message.content)
 ```
 
 ## Available Models
+- claude-opus-4-20250514
+- claude-sonnet-4-20250514
 - claude-3-opus-20240229
 - claude-3-sonnet-20240229
 - claude-3-haiku-20240307
@@ -34,6 +36,8 @@ print(response.choices[0].message.content)
 3. Audio input not supported
 4. Prompt caching not supported via OpenAI SDK (use native Anthropic SDK)
 5. Rate limits follow Anthropic's standard limits
+6. Extended context windows (200K tokens) for long-horizon tasks
+7. Enhanced reasoning capabilities for complex problem-solving
 
 ## Supported Features
 - ✅ Chat completions
@@ -70,3 +74,18 @@ response = client.chat.completions.create(
 - This compatibility layer is for testing and comparison, not production
 - For full features (PDFs, citations, prompt caching), use native Anthropic SDK
 - Most unsupported fields are silently ignored rather than producing errors
+- Claude 4 models (Opus and Sonnet) support extended context windows and enhanced reasoning capabilities
+- For the latest model availability and features, refer to Anthropic's official API documentation
+
+## Claude 4 Latest Capabilities (August 2025)
+
+### Enhanced Reasoning
+- **Long-Horizon Tasks**: Can execute complex, multi-step reasoning over extended periods
+- **Coding Proficiency**: Optimized for software development and code analysis
+- **Data Analysis**: Advanced capabilities for analyzing large datasets and complex information
+
+### Use Cases
+- **Agentic Workflows**: Configurable reasoning efforts for different complexity levels
+- **Extended Context**: 200K token context windows for comprehensive document analysis
+- **Complex Problem-Solving**: Multi-step reasoning for engineering and research tasks
+- **Code Generation**: Advanced coding assistance with understanding of large codebases

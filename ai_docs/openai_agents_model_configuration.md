@@ -17,6 +17,20 @@ The OpenAI Agents SDK supports multiple model providers through different config
 - Fallback for providers without Responses API support
 - More widely compatible with OpenAI-compatible endpoints
 
+### 2. Latest Model Families (August 2025)
+
+#### GPT-5 Series
+- **gpt-5**: Flagship reasoning model with PhD-level expertise
+- **gpt-5-mini**: 80% of GPT-5 capabilities at 20% cost
+- **gpt-5-nano**: Ultra-lightweight for edge deployment
+- **gpt-5-chat-latest**: Non-reasoning chat model for fast responses
+
+#### GPT-OSS Series
+- **gpt-oss:20b**: Open-weight model for consumer hardware (16GB+ VRAM)
+- **gpt-oss:120b**: High-performance open-weight model (80GB+ VRAM)
+- **License**: Apache 2.0 - Free for commercial use
+- **Availability**: Local deployment via Ollama, cloud via AWS Bedrock
+
 ## Non-OpenAI Model Integration
 
 ### Method 1: LiteLLM Integration (Simplest)
@@ -159,14 +173,17 @@ Solution: Use providers that support JSON schema outputs, or handle malformed JS
 
 ## Feature Compatibility Matrix
 
-| Feature | OpenAI | Anthropic (via LiteLLM) | Ollama |
-|---------|--------|-------------------------|---------|
-| Responses API | ✅ | ❌ | ❌ |
-| Chat Completions | ✅ | ✅ | ✅ |
-| Structured Outputs | ✅ | ⚠️ | ❌ |
-| Multimodal | ✅ | ✅ | ⚠️ |
-| Function Calling | ✅ | ✅ | ❌ |
-| File/Web Search | ✅ | ❌ | ❌ |
+| Feature | OpenAI | Anthropic (via LiteLLM) | Ollama | GPT-OSS |
+|---------|--------|-------------------------|---------|---------|
+| Responses API | ✅ | ❌ | ❌ | ❌ |
+| Chat Completions | ✅ | ✅ | ✅ | ✅ |
+| Structured Outputs | ✅ | ⚠️ | ❌ | ⚠️ |
+| Multimodal | ✅ | ✅ | ⚠️ | ❌ |
+| Function Calling | ✅ | ✅ | ❌ | ⚠️ |
+| File/Web Search | ✅ | ❌ | ❌ | ❌ |
+| Extended Context | ✅ (400K) | ✅ (200K) | ✅ (131K) | ✅ (131K) |
+| Reasoning Effort | ✅ (GPT-5) | ✅ (Claude 4) | ❌ | ⚠️ |
+| Local Deployment | ❌ | ❌ | ✅ | ✅ |
 
 ## Key Implementation Notes
 
@@ -213,6 +230,74 @@ ollama_agent = Agent(
     model=OpenAIChatCompletionsModel(
         model="gpt-oss:20b",
         openai_client=ollama_client
+    )
+)
+```
+
+## Integration with Latest Models
+
+### GPT-5 Reasoning Models
+
+```python
+# Using GPT-5 with reasoning capabilities
+reasoning_agent = Agent(
+    name="Research Agent",
+    model="gpt-5",  # or "gpt-5-mini" for cost optimization
+    model_settings=ModelSettings(
+        temperature=0.1,
+        extra_args={
+            "reasoning_effort": "high",  # GPT-5 specific parameter
+            "max_tokens": 128000,  # Up to 128K output tokens
+        }
+    )
+)
+
+# For edge deployment with minimal reasoning
+edge_agent = Agent(
+    name="Edge Agent",
+    model="gpt-5-nano",
+    model_settings=ModelSettings(
+        extra_args={
+            "reasoning_effort": "minimal",  # Fastest, cheapest
+        }
+    )
+)
+```
+
+### GPT-OSS Local Models
+
+```python
+# Local GPT-OSS deployment via Ollama
+from openai import AsyncOpenAI
+
+ollama_client = AsyncOpenAI(
+    base_url="http://localhost:11434/v1",
+    api_key="ollama"
+)
+
+local_agent = Agent(
+    name="Local Agent",
+    model=OpenAIChatCompletionsModel(
+        model="gpt-oss:20b",  # Use exact Ollama model name
+        openai_client=ollama_client
+    ),
+    model_settings=ModelSettings(
+        temperature=0.2,
+        max_tokens=131000,  # Full context window
+    )
+)
+```
+
+### Claude 4 Models
+
+```python
+# Claude 4 with extended context
+claude_agent = Agent(
+    name="Claude Agent",
+    model="litellm/anthropic/claude-opus-4-20250514",
+    model_settings=ModelSettings(
+        temperature=0.1,
+        max_tokens=200000,  # Claude 4's 200K context
     )
 )
 ```

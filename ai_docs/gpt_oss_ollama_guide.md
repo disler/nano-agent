@@ -4,17 +4,43 @@ Source: [OpenAI Cookbook](https://cookbook.openai.com/articles/gpt-oss/run-local
 
 ## Model Options
 
-### gpt-oss-20b
-- Smaller model
-- Best with ≥16GB VRAM or unified memory
-- Perfect for higher-end consumer GPUs or Apple Silicon Macs
+### gpt-oss:20b
+- **Release Date**: August 5, 2025
+- **License**: Apache 2.0
+- **Smaller model** optimized for consumer hardware
+- **Best with ≥16GB VRAM or unified memory**
+- **Perfect for higher-end consumer GPUs or Apple Silicon Macs**
+- **Context Length**: 131K tokens
+- **Hardware Requirements**: 40GB VRAM (FP16), ~10GB VRAM (4-bit quantized)
 
-### gpt-oss-120b
-- Full-sized model
-- Best with ≥60GB VRAM or unified memory
-- Ideal for multi-GPU or workstation setups
+### gpt-oss:120b
+- **Release Date**: August 5, 2025
+- **License**: Apache 2.0
+- **Full-sized model** for high-performance tasks
+- **Best with ≥80GB VRAM or unified memory**
+- **Ideal for multi-GPU or workstation setups**
+- **Context Length**: 32K tokens
+- **Hardware Requirements**: 240GB VRAM (FP16), ~60GB VRAM (4-bit quantized)
 
-**Note:** Models ship MXFP4 quantized out of the box. CPU offloading is possible but slower.
+**Note:** Models ship MXFP4 quantized out of the box. CPU offloading is possible but slower. Both models are now available on Amazon Bedrock and AWS SageMaker for cloud deployment.
+
+## Latest Capabilities (August 2025)
+
+### Enhanced Reasoning
+- **Configurable Reasoning Efforts**: Adjust reasoning depth for different task complexities
+- **Agentic Workflows**: Optimized for autonomous AI agents and multi-step reasoning
+- **Extended Context**: 131K tokens for gpt-oss:20b, 32K for gpt-oss:120b
+
+### Use Cases
+- **On-Device AI**: Privacy-focused applications with local processing
+- **Cost-Efficient Deployment**: Free open-weight models for production use
+- **Extended Document Analysis**: Process large documents and codebases
+- **Multi-Step Problem Solving**: Complex reasoning tasks requiring sustained attention
+
+### Cloud Integration
+- **Amazon Bedrock**: Native integration for enterprise deployment
+- **AWS SageMaker**: Pre-configured endpoints and scaling
+- **Hybrid Deployment**: Combine local Ollama with cloud services
 
 ## Quick Setup
 

@@ -12,6 +12,7 @@ OpenAI has introduced two groundbreaking model families in August 2025:
 - **Announcement Date**: August 7, 2025
 - **Rollout**: Gradual API access to Plus subscribers
 - **Full Availability**: Rolling out across platforms
+- **Latest Update**: August 11, 2025 - General availability expanding
 
 ### Model IDs for API Access
 
@@ -25,6 +26,8 @@ OpenAI has introduced two groundbreaking model families in August 2025:
 | Chat-optimized | `gpt-5-chat-latest` | Non-reasoning, fast streaming |
 | **Aliases** | | |
 | Latest stable | `gpt-5-2025-08-06` | Date-versioned stable release |
+| **New Models** | | |
+| Deep Research | `gpt-deep-research` | AI agent for extensive web browsing and analysis |
 
 ### Model Variants
 
@@ -139,8 +142,9 @@ chat_response = client.chat.completions.create(
 
 ### Overview
 - **Announcement Date**: August 5, 2025
-- **Type**: Open-weight models under MIT license
-- **Availability**: Weights available on Hugging Face
+- **Type**: Open-weight models under Apache 2.0 license
+- **Availability**: Weights available on Hugging Face and AWS
+- **Latest Update**: August 11, 2025 - Now available on Amazon Bedrock and SageMaker
 
 ### Model Variants
 
@@ -252,6 +256,7 @@ trainer.train()
 
 #### Cloud Deployment
 - **AWS SageMaker**: Pre-configured endpoints for gpt-oss models
+- **Amazon Bedrock**: Native integration for gpt-oss-120b and gpt-oss-20b
 - **Azure AI Foundry**: Native GPT-5 integration via Azure OpenAI Service
 - **Google Cloud Vertex AI**: Model garden integration for open models
 - **Replicate**: One-click deployment for gpt-oss variants
@@ -261,6 +266,20 @@ trainer.train()
 - **TensorRT**: NVIDIA GPU acceleration for gpt-oss-20b
 - **Core ML**: Apple Silicon optimization for on-device inference
 - **Mobile SDKs**: Direct integration via OpenAI mobile libraries
+
+### New Models
+
+#### gpt-deep-research
+- **Model ID**: `gpt-deep-research`
+- **Release Date**: February 2, 2025
+- **Type**: AI agent leveraging OpenAI's o3 model
+- **Capabilities**: 
+  - Extensive web browsing and data analysis
+  - Multi-step research tasks
+  - Comprehensive report generation
+  - Data synthesis and analysis
+- **Availability**: Initially ChatGPT Pro subscribers, lightweight version for all users since April 2025
+- **Use Cases**: In-depth research, data analysis, comprehensive reporting
 
 ## Comparison Matrix
 
