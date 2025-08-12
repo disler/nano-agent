@@ -138,11 +138,16 @@ class ProviderConfig:
         Args:
             provider: Provider name
         """
-        if provider != "openai":
-            # Disable tracing for non-OpenAI providers by default
+        if provider == "ollama":
+            # Always disable tracing for Ollama since it runs locally
+            logger.info(f"Disabling tracing for {provider} provider (local model)")
+            set_tracing_disabled(True)
+        elif provider != "openai":
+            # Disable tracing for other non-OpenAI providers by default
             # unless an OpenAI key is available for tracing
-            if not os.getenv("OPENAI_API_KEY"):
-                logger.info(f"Disabling tracing for {provider} provider (no OpenAI API key for tracing)")
+            openai_key = os.getenv("OPENAI_API_KEY")
+            if not openai_key or openai_key == "sk-none":
+                logger.info(f"Disabling tracing for {provider} provider (no valid OpenAI API key)")
                 set_tracing_disabled(True)
             else:
                 logger.debug(f"Tracing enabled for {provider} provider using OpenAI API key")
