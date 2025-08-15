@@ -7,6 +7,7 @@ import json
 import sys
 import re
 import os
+import subprocess
 from pathlib import Path
 from utils.constants import ensure_session_log_dir
 
@@ -129,6 +130,86 @@ def get_protected_paths():
 
     return expanded_paths
 
+def is_within_cwd(path):
+    """
+    Check if a path is within the current working directory.
+    """
+    try:
+        # Get current working directory
+        cwd = os.getcwd()
+        
+        # Resolve the path (handle ~, .., etc.)
+        if path.startswith('~'):
+            resolved_path = os.path.expanduser(path)
+        else:
+            # For relative paths, resolve them relative to CWD
+            resolved_path = os.path.abspath(os.path.join(cwd, path))
+        
+        # Check if the resolved path is within CWD
+        return resolved_path.startswith(cwd + os.sep) or resolved_path == cwd
+    except:
+        # If we can't resolve the path, assume it's not within CWD
+        return False
+
+def extract_target_paths(command):
+    """
+    Extract all target paths from a removal command.
+    Returns a list of (original_path, resolved_path) tuples.
+    """
+    paths = []
+    
+    # Patterns to extract paths from different commands
+    patterns = [
+        # rm commands with various flags
+        r'\brm\s+(?:-[a-z]*\s+)*([^\s]+)',
+        # mv to trash patterns
+        r'\bmv\s+([^\s]+)\s+(?:~?/\.Trash|.*\.trash|.*trash/)',
+        # rmdir
+        r'\brmdir\s+([^\s]+)',
+        # trash commands
+        r'\btrash\s+([^\s]+)',
+        # find with delete
+        r'\bfind\s+([^\s]+)\s+.*-delete',
+    ]
+    
+    for pattern in patterns:
+        matches = re.findall(pattern, command, re.IGNORECASE)
+        for match in matches:
+            # Skip flags that start with -
+            if match.startswith('-'):
+                continue
+                
+            # Resolve the path
+            if match.startswith('~'):
+                resolved = os.path.expanduser(match)
+            else:
+                # For relative paths, resolve relative to CWD
+                resolved = os.path.abspath(os.path.join(os.getcwd(), match))
+            
+            paths.append((match, resolved))
+    
+    # Also handle wildcards and multiple files
+    # Split command into parts and look for paths
+    parts = command.split()
+    for i, part in enumerate(parts):
+        # Skip the command itself and flags
+        if i == 0 or part.startswith('-'):
+            continue
+        
+        # Skip if already captured
+        if any(part == p[0] for p in paths):
+            continue
+            
+        # Check if this looks like a path
+        if '/' in part or part in ['.', '..'] or part.endswith('*'):
+            if part.startswith('~'):
+                resolved = os.path.expanduser(part)
+            else:
+                resolved = os.path.abspath(os.path.join(os.getcwd(), part))
+            paths.append((part, resolved))
+    
+    return paths
+
 def is_protected_path_operation(command):
     """
     Check if the command is attempting to operate on protected paths.
@@ -185,26 +266,35 @@ def main():
         if tool_name == 'Bash':
             command = tool_input.get('command', '')
 
-            # First check if operating on protected paths
-            is_protected, protected_path = is_protected_path_operation(command)
-            if is_protected:
-                print(f"BLOCKED: Attempt to modify protected path: {protected_path}", file=sys.stderr)
-                print("Protected paths cannot be modified. Set CLAUDE_PROTECTED_PATHS env var to customize.", file=sys.stderr)
-                sys.exit(2)
-
-            # Block removal commands with comprehensive pattern matching
+            # Check if this is a removal command
             if is_dangerous_removal_command(command):
-                # Provide specific feedback based on the type of command
-                if 'trash' in command.lower() or 'mv' in command.lower():
-                    print("BLOCKED: File/folder removal attempt detected. Moving to trash is also prohibited.", file=sys.stderr)
-                elif 'osascript' in command.lower() or 'finder' in command.lower():
-                    print("BLOCKED: AppleScript removal attempt detected and prevented.", file=sys.stderr)
-                elif 'find' in command.lower() and '-delete' in command.lower():
-                    print("BLOCKED: Find with -delete detected and prevented.", file=sys.stderr)
-                else:
-                    print("BLOCKED: Dangerous removal command detected and prevented.", file=sys.stderr)
-                print("If you need to remove files, please ask the user for explicit permission.", file=sys.stderr)
-                sys.exit(2)  # Exit code 2 blocks tool call and shows error to Claude
+                # Extract all target paths from the command
+                target_paths = extract_target_paths(command)
+                
+                # If we couldn't extract any paths, block to be safe
+                if not target_paths:
+                    print("BLOCKED: Removal command detected but target paths could not be determined.", file=sys.stderr)
+                    print("Please specify clear paths for removal operations.", file=sys.stderr)
+                    sys.exit(2)
+                
+                # Check each target path
+                for original_path, resolved_path in target_paths:
+                    # First check if it's a protected system path
+                    protected_paths = get_protected_paths()
+                    for protected in protected_paths:
+                        if resolved_path.startswith(protected) or original_path.startswith(protected):
+                            print(f"BLOCKED: Cannot delete protected system path: {protected}", file=sys.stderr)
+                            print("Protected paths cannot be modified. Set CLAUDE_PROTECTED_PATHS env var to customize.", file=sys.stderr)
+                            sys.exit(2)
+                    
+                    # Then check if it's within CWD
+                    if not is_within_cwd(original_path):
+                        print(f"BLOCKED: Cannot delete files outside current working directory: {original_path}", file=sys.stderr)
+                        print(f"Current working directory: {os.getcwd()}", file=sys.stderr)
+                        sys.exit(2)
+                
+                # If we get here, all paths are within CWD and not protected
+                # Allow the deletion to proceed
 
         # Extract session_id
         session_id = input_data.get('session_id', 'unknown')
