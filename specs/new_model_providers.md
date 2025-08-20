@@ -171,13 +171,18 @@ AVAILABLE_MODELS = {
     "ollama": [
         "gpt-oss:20b",
         "gpt-oss:120b"
+    ],
+    "lmstudio": [
+        "qwen/qwen3-coder-30b"
     ]
 }
 
 PROVIDER_REQUIREMENTS = {
     "openai": "OPENAI_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
+    "lmstudio": None, 
     "ollama": None  # No API key needed
+
 }
 ```
 

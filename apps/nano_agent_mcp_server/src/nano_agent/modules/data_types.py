@@ -23,7 +23,7 @@ class PromptNanoAgentRequest(BaseModel):
         default="gpt-5-mini",
         description="LLM model to use for the agent"
     )
-    provider: Literal["openai", "anthropic", "ollama"] = Field(
+    provider: Literal["openai", "anthropic", "ollama", "lmstudio"] = Field(
         default="openai",
         description="LLM provider for the agent"
     )
