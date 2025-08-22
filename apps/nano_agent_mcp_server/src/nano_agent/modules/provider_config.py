@@ -71,7 +71,7 @@ class ProviderConfig:
             instructions: System instructions for the agent
             tools: List of tool functions
             model: Model identifier
-            provider: Provider name ('openai', 'anthropic', 'ollama')
+            provider: Provider name ('openai', 'anthropic', 'ollama','lmstudio')
             model_settings: Optional model settings
             
         Returns:
@@ -127,7 +127,23 @@ class ProviderConfig:
                 ),
                 model_settings=model_settings
             )
-        
+        elif provider == "lmstudio":
+            # Use OpenAI-compatible endpoint for LMStudio
+            logger.debug(f"Creating LMStudio agent with model: {model}")
+            lmstudio_client = AsyncOpenAI(
+                base_url="http://localhost:1234/v1",
+                api_key="lmstudio"  # Dummy key required by client
+            )
+            return Agent(
+                name=name,
+                instructions=instructions,
+                tools=tools,
+                model=OpenAIChatCompletionsModel(
+                    model=model,
+                    openai_client=lmstudio_client
+                ),
+                model_settings=model_settings
+            )
         else:
             raise ValueError(f"Unsupported provider: {provider}")
     
@@ -138,11 +154,20 @@ class ProviderConfig:
         Args:
             provider: Provider name
         """
-        if provider != "openai":
-            # Disable tracing for non-OpenAI providers by default
+        if provider == "ollama":
+            # Always disable tracing for Ollama since it runs locally
+            logger.info(f"Disabling tracing for {provider} provider (local model)")
+            set_tracing_disabled(True)
+        elif provider == "lmstudio":
+            # Always disable tracing for LMStudio since it runs locally
+            logger.info(f"Disabling tracing for {provider} provider (local model)")
+            set_tracing_disabled(True)
+        elif provider != "openai":
+            # Disable tracing for other non-OpenAI providers by default
             # unless an OpenAI key is available for tracing
-            if not os.getenv("OPENAI_API_KEY"):
-                logger.info(f"Disabling tracing for {provider} provider (no OpenAI API key for tracing)")
+            openai_key = os.getenv("OPENAI_API_KEY")
+            if not openai_key or openai_key == "sk-none":
+                logger.info(f"Disabling tracing for {provider} provider (no valid OpenAI API key)")
                 set_tracing_disabled(True)
             else:
                 logger.debug(f"Tracing enabled for {provider} provider using OpenAI API key")
@@ -187,4 +212,14 @@ class ProviderConfig:
             except Exception as e:
                 return False, f"Error checking Ollama availability: {str(e)}"
         
+        elif provider == "lmstudio":
+            # Check LMStudio availability
+            try:
+                response = requests.get("http://localhost:1234/v1/models", timeout=1)
+                models = [m["id"] for m in response.json().get("data", [])]
+                if model not in models:
+                    return False, f"Model {model} not pulled in LMStudio. Run: lmstudio get {model}"
+            except requests.ConnectionError:
+                return False, "LMStudio service not running. Start with: lmstudio serve"
+            
         return True, None

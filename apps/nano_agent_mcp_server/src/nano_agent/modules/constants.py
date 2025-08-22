@@ -19,6 +19,7 @@ AVAILABLE_MODELS = {
         "claude-3-haiku-20240307",
     ],
     "ollama": ["gpt-oss:20b", "gpt-oss:120b"],
+    "lmstudio": ["qwen/qwen3-coder-30b", "openai/gpt-oss-20b"],
 }
 
 # Model Display Names and Descriptions
@@ -33,6 +34,7 @@ MODEL_INFO = {
     "claude-3-haiku-20240307": "Claude 3 Haiku - Fast and efficient",
     "gpt-oss:20b": "GPT-OSS 20B - Local open-source model",
     "gpt-oss:120b": "GPT-OSS 120B - Large local model",
+    "qwen/qwen3-coder-30b": "Qwen3 Coder 30B - Local model",
 }
 
 # Provider API Key Requirements
@@ -40,6 +42,7 @@ PROVIDER_REQUIREMENTS = {
     "openai": "OPENAI_API_KEY",
     "anthropic": "ANTHROPIC_API_KEY",
     "ollama": None,  # No API key needed
+    "lmstudio": None,  # No API key needed
 }
 
 # Agent Configuration
