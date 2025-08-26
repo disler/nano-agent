@@ -11,6 +11,16 @@ from datetime import datetime
 
 # MCP Tool Request/Response Models
 
+class ChatMessage(BaseModel):
+    """A single message in a chat conversation."""
+    role: Literal["user", "assistant", "system"] = Field(
+        description="The role of the message sender"
+    )
+    content: str = Field(
+        description="The content of the message"
+    )
+
+
 class PromptNanoAgentRequest(BaseModel):
     """Request model for prompt_nano_agent MCP tool."""
     agentic_prompt: str = Field(
@@ -26,6 +36,14 @@ class PromptNanoAgentRequest(BaseModel):
     provider: Literal["openai", "anthropic", "ollama", "lmstudio"] = Field(
         default="openai",
         description="LLM provider for the agent"
+    )
+    chat_history: Optional[List[ChatMessage]] = Field(
+        default=None,
+        description="Optional chat history for maintaining conversation context"
+    )
+    agent_name: Optional[str] = Field(
+        default=None,
+        description="Optional agent personality to use"
     )
 
 

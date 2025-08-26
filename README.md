@@ -91,6 +91,13 @@ uv run nano-cli run "List all Python files in the current directory"  # gpt-5-mi
 uv run nano-cli run "Create a hello world script in python" --model gpt-5-nano
 uv run nano-cli run "Summarize the README.md" --model gpt-5
 
+# NEW: Use command files (similar to Claude Code's .claude/commands/)
+uv run nano-cli run '/summarize README.md contents here'
+uv run nano-cli run '/analyze "$(cat src/main.py)"'
+uv run nano-cli run '/explain how async works in Python'
+uv run nano-cli commands list  # List available commands
+uv run nano-cli commands create my-command  # Create custom command
+
 # Test Anthropic models (requires ANTHROPIC_API_KEY)
 uv run nano-cli run "Hello" --model claude-3-haiku-20240307 --provider anthropic
 uv run nano-cli run "Hello" --model claude-sonnet-4-20250514 --provider anthropic
@@ -103,6 +110,9 @@ uv run nano-cli run "List files and count the total number of files and director
 
 # Verbose mode (shows token usage)
 uv run nano-cli run "Create and edit a test file" --verbose
+
+# Interactive mode with autocompletion and /commands
+uv run nano-cli interactive
 ```
 
 ### Through Claude Code
@@ -176,6 +186,7 @@ This architecture ensures fair comparison by using the same OpenAI Agent SDK for
 - 🎯 **Unified Interface**: All providers use the same OpenAI SDK for consistency
 - 📦 **Experiment Ready**: Decent testing, error handling, and token tracking
 - 🚀 **Easy Integration**: Works with Claude Desktop, or as a CLI
+- 📝 **Command Files**: Reusable prompt templates via `~/.nano-cli/commands/` (similar to Claude Code)
 
 ## Nano-Agent Tools
 > Feel free to add/remove/improve tools as you see fit.

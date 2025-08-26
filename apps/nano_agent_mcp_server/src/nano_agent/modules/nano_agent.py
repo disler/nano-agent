@@ -340,10 +340,19 @@ async def _execute_nano_agent_async(request: PromptNanoAgentRequest, enable_rich
             base_settings=base_settings
         )
         
+        # Get the system prompt (possibly extended with agent personality)
+        system_prompt = NANO_AGENT_SYSTEM_PROMPT
+        if request.agent_name:
+            from .agent_loader import AgentLoader
+            agent_loader = AgentLoader()
+            if agent_loader.switch_agent(request.agent_name):
+                system_prompt = agent_loader.get_extended_system_prompt(NANO_AGENT_SYSTEM_PROMPT)
+                logger.info(f"Using extended system prompt with agent: {request.agent_name}")
+        
         # Create agent using the provider configuration
         agent = ProviderConfig.create_agent(
             name="NanoAgent",
-            instructions=NANO_AGENT_SYSTEM_PROMPT,
+            instructions=system_prompt,
             tools=tools,
             model=request.model,
             provider=request.provider,
@@ -354,10 +363,32 @@ async def _execute_nano_agent_async(request: PromptNanoAgentRequest, enable_rich
         token_tracker = TokenTracker(model=request.model, provider=request.provider) if enable_rich_logging else None
         hooks = RichLoggingHooks(token_tracker=token_tracker) if enable_rich_logging else None
         
+        # Prepare the prompt with chat history context
+        # Since Runner.run doesn't support messages parameter directly,
+        # we'll format the chat history as part of the prompt
+        if request.chat_history and len(request.chat_history) > 0:
+            # Build a conversation context string
+            conversation_lines = []
+            conversation_lines.append("Previous conversation context:")
+            conversation_lines.append("---")
+            for msg in request.chat_history:
+                role_label = "User" if msg.role == "user" else "Assistant" if msg.role == "assistant" else msg.role.capitalize()
+                conversation_lines.append(f"{role_label}: {msg.content}")
+            conversation_lines.append("---")
+            conversation_lines.append("Current request:")
+            conversation_lines.append(request.agentic_prompt)
+            
+            # Combine into a single prompt with context
+            full_prompt = "\n".join(conversation_lines)
+            has_history = "true"  # Use string for trace metadata
+        else:
+            full_prompt = request.agentic_prompt
+            has_history = "false"  # Use string for trace metadata
+        
         # Run the agent asynchronously
         result = await Runner.run(
             agent,
-            request.agentic_prompt,
+            full_prompt,
             max_turns=MAX_AGENT_TURNS,
             run_config=RunConfig(
                 workflow_name="nano_agent_task",
@@ -365,6 +396,7 @@ async def _execute_nano_agent_async(request: PromptNanoAgentRequest, enable_rich
                     "model": request.model,
                     "provider": request.provider,
                     "timestamp": datetime.now().isoformat(),
+                    "has_history": has_history  # Now a string
                 }
             ),
             hooks=hooks
@@ -470,10 +502,19 @@ def _execute_nano_agent(request: PromptNanoAgentRequest, enable_rich_logging: bo
             base_settings=base_settings
         )
         
+        # Get the system prompt (possibly extended with agent personality)
+        system_prompt = NANO_AGENT_SYSTEM_PROMPT
+        if request.agent_name:
+            from .agent_loader import AgentLoader
+            agent_loader = AgentLoader()
+            if agent_loader.switch_agent(request.agent_name):
+                system_prompt = agent_loader.get_extended_system_prompt(NANO_AGENT_SYSTEM_PROMPT)
+                logger.info(f"Using extended system prompt with agent: {request.agent_name}")
+        
         # Create agent with provider-specific configuration
         agent = ProviderConfig.create_agent(
             name="NanoAgent",
-            instructions=NANO_AGENT_SYSTEM_PROMPT,
+            instructions=system_prompt,
             tools=get_nano_agent_tools(),
             model=request.model,
             provider=request.provider,
@@ -484,21 +525,78 @@ def _execute_nano_agent(request: PromptNanoAgentRequest, enable_rich_logging: bo
         token_tracker = TokenTracker(model=request.model, provider=request.provider) if enable_rich_logging else None
         hooks = RichLoggingHooks(token_tracker=token_tracker) if enable_rich_logging else None
         
-        # Run the agent synchronously (we'll handle async in the wrapper)
-        result = Runner.run_sync(
-            agent,
-            request.agentic_prompt,
-            max_turns=MAX_AGENT_TURNS,
-            run_config=RunConfig(
-                workflow_name="nano_agent_task",
-                trace_metadata={
-                    "model": request.model,
-                    "provider": request.provider,
-                    "timestamp": datetime.now().isoformat(),
-                }
-            ),
-            hooks=hooks
-        )
+        # Run the agent synchronously
+        # Handle the case where there might not be an event loop
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                raise RuntimeError("Event loop is closed")
+        except RuntimeError:
+            # Create a new event loop if none exists or it's closed
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        # Prepare the prompt with chat history context
+        # Since Runner.run_sync doesn't support messages parameter directly,
+        # we'll format the chat history as part of the prompt
+        if request.chat_history and len(request.chat_history) > 0:
+            # Build a conversation context string
+            conversation_lines = []
+            conversation_lines.append("Previous conversation context:")
+            conversation_lines.append("---")
+            for msg in request.chat_history:
+                role_label = "User" if msg.role == "user" else "Assistant" if msg.role == "assistant" else msg.role.capitalize()
+                conversation_lines.append(f"{role_label}: {msg.content}")
+            conversation_lines.append("---")
+            conversation_lines.append("Current request:")
+            conversation_lines.append(request.agentic_prompt)
+            
+            # Combine into a single prompt with context
+            full_prompt = "\n".join(conversation_lines)
+            has_history = "true"  # Use string for trace metadata
+        else:
+            full_prompt = request.agentic_prompt
+            has_history = "false"  # Use string for trace metadata
+        
+        try:
+            result = Runner.run_sync(
+                agent,
+                full_prompt,
+                max_turns=MAX_AGENT_TURNS,
+                run_config=RunConfig(
+                    workflow_name="nano_agent_task",
+                    trace_metadata={
+                        "model": request.model,
+                        "provider": request.provider,
+                        "timestamp": datetime.now().isoformat(),
+                        "has_history": has_history  # Now a string
+                    }
+                ),
+                hooks=hooks
+            )
+        except RuntimeError as e:
+            if "no current event loop" in str(e).lower():
+                # Fallback: use asyncio.run if run_sync fails
+                async def run_agent():
+                    return await Runner.run(
+                        agent,
+                        full_prompt,  # Use the full prompt with context
+                        max_turns=MAX_AGENT_TURNS,
+                        run_config=RunConfig(
+                            workflow_name="nano_agent_task",
+                            trace_metadata={
+                                "model": request.model,
+                                "provider": request.provider,
+                                "timestamp": datetime.now().isoformat(),
+                                "has_history": has_history
+                            }
+                        ),
+                        hooks=hooks
+                    )
+                result = asyncio.run(run_agent())
+            else:
+                raise
         
         execution_time = time.time() - start_time
         

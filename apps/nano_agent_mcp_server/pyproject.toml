@@ -15,6 +15,7 @@ dependencies = [
     "openai-agents>=0.1.0",  # Has compatibility issue with openai>=1.99.2, fixed via typing_fix.py
     "requests>=2.28.0",
     "python-dotenv>=1.0.0",
+    "prompt-toolkit>=3.0.0",  # For enhanced interactive mode with autocompletion
 ]
 
 [project.optional-dependencies]

@@ -1,0 +1,3 @@
+Hello from Nano Agent CLI!
+This is line 2
+This is line 3
