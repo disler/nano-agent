@@ -7,8 +7,10 @@ from markdown files in ~/.nano-cli/agents/ directory.
 
 from pathlib import Path
 from typing import Optional, List, Dict, Any
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import logging
+import yaml
+import re
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
@@ -24,6 +26,9 @@ class Agent:
     path: Path
     content: str
     description: Optional[str] = None
+    keywords: List[str] = field(default_factory=list)
+    tools: List[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
     
     @property
     def system_prompt_extension(self) -> str:
@@ -66,30 +71,69 @@ The base system prompt is used as-is.
         logger.info(f"Created default agent at {path}")
     
     def _parse_agent_file(self, path: Path) -> Agent:
-        """Parse an agent markdown file."""
+        """Parse an agent markdown file with optional YAML frontmatter."""
         content = path.read_text()
-        lines = content.split('\n')
         
-        # Extract description from first heading or paragraph
-        description = None
-        for line in lines:
-            if line.strip() and not line.startswith('#'):
-                description = line.strip()
-                break
+        # Check for YAML frontmatter
+        metadata = {}
+        prompt_content = content
         
-        # Remove the agent name if it's just "# Agent Name"
+        # Pattern to detect YAML frontmatter
+        frontmatter_match = re.match(r'^---\s*\n(.*?)\n---\s*\n(.*)$', content, re.DOTALL)
+        
+        if frontmatter_match:
+            # Parse YAML frontmatter
+            yaml_content = frontmatter_match.group(1)
+            prompt_content = frontmatter_match.group(2)
+            
+            try:
+                metadata = yaml.safe_load(yaml_content) or {}
+            except yaml.YAMLError as e:
+                logger.warning(f"Error parsing YAML frontmatter in {path}: {e}")
+                metadata = {}
+        
+        # Extract values from metadata or use defaults
+        name = metadata.get('name', path.stem)
+        description = metadata.get('description', None)
+        keywords = metadata.get('keywords', '')
+        tools = metadata.get('tools', '')
+        
+        # Convert keywords and tools to lists
+        if isinstance(keywords, str):
+            keywords = [k.strip() for k in keywords.split(',') if k.strip()]
+        elif not isinstance(keywords, list):
+            keywords = []
+            
+        if isinstance(tools, str):
+            tools = [t.strip() for t in tools.split(',') if t.strip()]
+        elif not isinstance(tools, list):
+            tools = []
+        
+        # If no description in metadata, try to extract from content
+        if not description:
+            lines = prompt_content.split('\n')
+            for line in lines:
+                if line.strip() and not line.startswith('#'):
+                    description = line.strip()
+                    break
+        
+        # Clean up the prompt content (remove leading title if present)
+        lines = prompt_content.split('\n')
         if lines and lines[0].startswith('# '):
             # Skip the title line for the system prompt extension
             prompt_lines = lines[1:]
             prompt_content = '\n'.join(prompt_lines).strip()
         else:
-            prompt_content = content.strip()
+            prompt_content = prompt_content.strip()
         
         return Agent(
-            name=path.stem,
+            name=name,
             path=path,
             content=prompt_content,
-            description=description
+            description=description,
+            keywords=keywords,
+            tools=tools,
+            metadata=metadata
         )
     
     def load_agent(self, agent_name: str) -> Optional[Agent]:
@@ -270,3 +314,22 @@ Specialized agent for [describe purpose].
         else:
             console.print(f"[red]Agent '{agent_name}' not found.[/red]")
             self.display_agents_table()
+    
+    def get_all_agents_metadata(self) -> Dict[str, Agent]:
+        """
+        Get metadata for all available agents.
+        
+        Returns:
+            Dictionary mapping agent names to Agent objects with metadata
+        """
+        agents_dict = {}
+        
+        for agent_file in self.agents_dir.glob("*.md"):
+            try:
+                agent = self._parse_agent_file(agent_file)
+                agents_dict[agent.name] = agent
+                self._agents_cache[agent.name] = agent
+            except Exception as e:
+                logger.error(f"Error parsing agent file {agent_file}: {e}")
+        
+        return agents_dict

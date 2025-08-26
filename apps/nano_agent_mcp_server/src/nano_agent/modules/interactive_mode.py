@@ -24,6 +24,7 @@ from rich.table import Table
 
 from .command_loader import CommandLoader, parse_command_syntax
 from .agent_loader import AgentLoader
+from .coordinator import CoordinatorAgent
 from .nano_agent import _execute_nano_agent
 from .data_types import PromptNanoAgentRequest, ChatMessage
 from .constants import DEFAULT_MODEL, DEFAULT_PROVIDER, AVAILABLE_MODELS
@@ -152,8 +153,11 @@ class InteractiveSession:
         self.history_file = Path.home() / ".nano-cli" / "history.txt"
         self._ensure_history_dir()
         
+        # Initialize coordinator agent
+        self.coordinator = CoordinatorAgent(model=initial_model, provider=initial_provider)
+        
         # Chat history for maintaining conversation context
-        self.chat_history = []  # List of {"role": "user/assistant", "content": str}
+        self.chat_history = []  # List of ChatMessage objects
         
         # Mark if model/provider were explicitly set via CLI
         if initial_model != DEFAULT_MODEL:
@@ -394,31 +398,17 @@ class InteractiveSession:
         if self._handle_shell_command(command):
             return True
         
-        # Check for @agent switching
+        # Check for @agent switching - but just pass it to coordinator
         if command.startswith('@'):
             agent_name = command[1:].strip()
             if not agent_name:
                 # Show current agent
-                if self.agent_loader.current_agent:
-                    console.print(f"[cyan]Current agent: {self.agent_loader.current_agent.name}[/cyan]")
-                else:
-                    console.print("[cyan]No agent loaded (using default)[/cyan]")
                 self.agent_loader.display_agents_table()
+                return True
             else:
-                # Switch to specified agent
-                if self.agent_loader.switch_agent(agent_name):
-                    console.print(f"[green]✓ Switched to agent: {agent_name}[/green]")
-                    self._save_ps1_config()  # Save the new default agent
-                    # Add a system message to chat history to indicate agent switch
-                    self.chat_history.append(ChatMessage(
-                        role="system",
-                        content=f"[Agent switched to: {agent_name}]"
-                    ))
-                else:
-                    console.print(f"[red]Agent '{agent_name}' not found.[/red]")
-                    console.print("[dim]Available agents:[/dim]")
-                    self.agent_loader.display_agents_table()
-            return True
+                # Let coordinator handle agent switching
+                # Just return false to pass the @agent command to coordinator
+                return False
         
         cmd = command.lower().strip()
         
@@ -801,66 +791,73 @@ class InteractiveSession:
                 if not user_input.strip():
                     continue
                 
-                # Process the prompt
-                final_prompt = self._process_prompt(user_input)
-                
-                # Check for exit signal
-                if final_prompt == 'EXIT':
+                # Check for special commands that should be handled locally
+                # (not sent to coordinator)
+                result = self._handle_special_command(user_input)
+                if result == 'EXIT':
                     break
-                    
-                if final_prompt is None:
+                elif result:
                     continue
                 
+                # Everything else goes through coordinator
                 # Add user message to chat history
-                self.chat_history.append(ChatMessage(role="user", content=final_prompt))
+                self.chat_history.append(ChatMessage(role="user", content=user_input))
                 
-                # Create request with chat history and agent
-                request = PromptNanoAgentRequest(
-                    agentic_prompt=final_prompt,
-                    model=self.model,
-                    provider=self.provider,
+                # Route through coordinator agent (synchronous)
+                response_dict = self.coordinator.coordinate_request(
+                    user_input=user_input,
                     chat_history=self.chat_history if len(self.chat_history) > 1 else None,
-                    agent_name=self.agent_loader.current_agent.name if self.agent_loader.current_agent else None
+                    model=self.model,
+                    provider=self.provider
                 )
                 
-                # Execute agent
-                response = _execute_nano_agent(request)
-                
                 # Display response
-                if response.success:
+                if response_dict.get('success'):
+                    result = response_dict.get('result', '')
                     # Add assistant response to chat history
-                    self.chat_history.append(ChatMessage(role="assistant", content=response.result))
+                    self.chat_history.append(ChatMessage(role="assistant", content=result))
+                    
+                    # Check if coordinator added metadata
+                    metadata = response_dict.get('metadata', {})
+                    coordinator_info = metadata.get('coordinator', {})
+                    
+                    # Display agent attribution if not default
+                    title = "💬 Agent Response"
+                    if coordinator_info.get('selected_agent') and coordinator_info['selected_agent'] != 'default':
+                        title = f"💬 {coordinator_info['selected_agent'].title()} Agent"
                     
                     console.print(Panel(
-                        response.result,
-                        title="💬 Agent Response",
+                        result,
+                        title=title,
                         border_style="cyan",
                         expand=False
                     ))
                     
-                    if self.verbose and response.metadata:
+                    if self.verbose and metadata:
                         import json
-                        metadata = response.metadata.copy()
-                        metadata["execution_time_seconds"] = round(response.execution_time_seconds, 2)
+                        metadata_copy = metadata.copy()
+                        if 'execution_time_seconds' in response_dict:
+                            metadata_copy["execution_time_seconds"] = round(response_dict['execution_time_seconds'], 2)
                         
                         console.print(Panel(
-                            json.dumps(metadata, indent=2),
+                            json.dumps(metadata_copy, indent=2),
                             title="🔍 Metadata",
                             border_style="dim",
                             expand=False
                         ))
                 else:
+                    error = response_dict.get('error', 'Unknown error')
                     console.print(Panel(
-                        response.error,
+                        error,
                         title="❌ Error",
                         border_style="red",
                         expand=False
                     ))
                     
-                    if self.verbose and response.metadata:
+                    if self.verbose and response_dict.get('metadata'):
                         import json
                         console.print(Panel(
-                            json.dumps(response.metadata, indent=2),
+                            json.dumps(response_dict['metadata'], indent=2),
                             title="🔍 Error Details",
                             border_style="dim",
                             expand=False
