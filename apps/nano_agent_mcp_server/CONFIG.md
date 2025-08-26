@@ -11,7 +11,8 @@ The configuration file supports the following settings:
   "ps1_format": "{time} {agent}@{model} > ",
   "default_model": "gpt-5-mini",
   "default_provider": "openai",
-  "default_agent": "coder"
+  "default_agent": "coder",
+  "show_welcome": true
 }
 ```
 
@@ -45,6 +46,15 @@ The default agent personality to load on startup.
 **Default**: `null` (no agent loaded)
 
 **Available agents**: Any agent file in `~/.nano-cli/agents/` (e.g., `coder`, `analyst`, `h4x0r`)
+
+### show_welcome
+Whether to display the welcome message when starting interactive mode.
+
+**Default**: `true`
+
+**Options**: `true` or `false`
+
+**Toggle in interactive mode**: Use `/welcome on` or `/welcome off`
 
 ## Configuration Priority
 

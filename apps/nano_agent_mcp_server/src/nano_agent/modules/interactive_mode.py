@@ -201,6 +201,8 @@ class InteractiveSession:
     def _load_ps1_config(self):
         """Load configuration from file."""
         config_file = Path.home() / ".nano-cli" / "config.json"
+        self.show_welcome = True  # Default to showing welcome
+        
         if config_file.exists():
             try:
                 with open(config_file, 'r') as f:
@@ -221,6 +223,10 @@ class InteractiveSession:
                     # Load default agent if not already set
                     if 'default_agent' in config and not self.agent_loader.current_agent:
                         self.agent_loader.switch_agent(config['default_agent'])
+                    
+                    # Load welcome message preference
+                    if 'show_welcome' in config:
+                        self.show_welcome = config['show_welcome']
                         
             except Exception as e:
                 # Log error but continue with defaults
@@ -244,6 +250,7 @@ class InteractiveSession:
         config['ps1_format'] = self.ps1_format
         config['default_model'] = self.model
         config['default_provider'] = self.provider
+        config['show_welcome'] = self.show_welcome
         
         # Save current agent as default if one is loaded
         if self.agent_loader.current_agent:
@@ -531,6 +538,25 @@ class InteractiveSession:
             console.print(f"[cyan]Verbose mode is {status}[/cyan]")
             return True
         
+        elif cmd.startswith('/welcome'):
+            parts = cmd.split()
+            if len(parts) > 1:
+                setting = parts[1].lower()
+                if setting == 'off':
+                    self.show_welcome = False
+                    self._save_ps1_config()
+                    console.print("[green]✓ Welcome message disabled[/green]")
+                elif setting == 'on':
+                    self.show_welcome = True
+                    self._save_ps1_config()
+                    console.print("[green]✓ Welcome message enabled[/green]")
+                else:
+                    console.print("[yellow]Usage: /welcome [on|off][/yellow]")
+            else:
+                # Show the welcome message
+                self._show_welcome_message()
+            return True
+        
         elif cmd.startswith('/ps1'):
             parts = cmd.split(maxsplit=1)
             if len(parts) == 1:
@@ -573,6 +599,40 @@ class InteractiveSession:
         
         return False
     
+    def _show_welcome_message(self):
+        """Display the welcome message from the data directory."""
+        try:
+            # Get the path to the welcome.md file
+            import importlib.resources as pkg_resources
+            
+            # Try to read from package data
+            try:
+                from .. import data
+                welcome_content = pkg_resources.read_text(data, 'welcome.md')
+            except (ImportError, FileNotFoundError):
+                # Fallback to file system path
+                welcome_path = Path(__file__).parent.parent / 'data' / 'welcome.md'
+                if welcome_path.exists():
+                    welcome_content = welcome_path.read_text()
+                else:
+                    welcome_content = "Welcome to Nano Agent Interactive Mode!\nType /help for available commands."
+            
+            # Display the welcome message
+            console.print(Panel(
+                welcome_content,
+                title="🚀 Welcome",
+                border_style="cyan",
+                expand=False
+            ))
+        except Exception as e:
+            # If anything fails, show a simple welcome
+            console.print(Panel(
+                "[bold cyan]Welcome to Nano Agent Interactive Mode![/bold cyan]\n"
+                "Type /help for available commands.",
+                border_style="cyan",
+                expand=False
+            ))
+    
     def _show_help(self):
         """Display help information."""
         current_agent = self.agent_loader.current_agent.name if self.agent_loader.current_agent else "default"
@@ -606,7 +666,8 @@ class InteractiveSession:
             "  /model <name>   - Change the model (e.g., /model gpt-5)\n"
             "  /provider <name>- Change the provider (e.g., /provider anthropic)\n"
             "  /verbose [on/off] - Toggle verbose output\n"
-            "  /ps1 [format]   - Customize prompt (e.g., /ps1 {pwd} [{agent}] >)\n\n"
+            "  /ps1 [format]   - Customize prompt (e.g., /ps1 {pwd} [{agent}] >)\n"
+            "  /welcome [on/off] - Toggle or show welcome message\n\n"
             "[yellow]Tips:[/yellow]\n"
             "  • Press Tab to autocomplete any /command\n"
             "  • Use ↑/↓ arrows for command history\n"
@@ -706,15 +767,19 @@ class InteractiveSession:
     
     def run(self):
         """Run the interactive session."""
-        console.print(Panel(
-            "[bold cyan]Nano Agent Interactive Mode[/bold cyan]\n"
-            "Type 'help' for commands, 'exit' to quit\n"
-            "Tab for autocompletion, ↑/↓ for history",
-            expand=False
-        ))
+        # Show welcome message if enabled
+        if self.show_welcome:
+            self._show_welcome_message()
+        else:
+            console.print(Panel(
+                "[bold cyan]Nano Agent Interactive Mode[/bold cyan]\n"
+                "Type 'help' for commands, 'exit' to quit\n"
+                "Tab for autocompletion, ↑/↓ for history",
+                expand=False
+            ))
         
         # Show current settings
-        console.print(f"[dim]Model: {self.model}, Provider: {self.provider}[/dim]\n")
+        console.print(f"\n[dim]Model: {self.model}, Provider: {self.provider}[/dim]\n")
         
         # Create history object
         history = FileHistory(str(self.history_file))
