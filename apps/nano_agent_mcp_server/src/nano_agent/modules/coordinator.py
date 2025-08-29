@@ -38,10 +38,13 @@ class CoordinatorAgent:
     Flow: User -> Coordinator -> Agent -> Coordinator -> User
     """
     
-    def __init__(self, model: str = DEFAULT_MODEL, provider: str = DEFAULT_PROVIDER):
+    def __init__(self, model: str = DEFAULT_MODEL, provider: str = DEFAULT_PROVIDER,
+                 api_base: Optional[str] = None, api_key: Optional[str] = None):
         """Initialize the coordinator agent."""
         self.model = model
         self.provider = provider
+        self.api_base = api_base
+        self.api_key = api_key
         self.agent_loader = AgentLoader()
         self.command_loader = CommandLoader()
         self.current_agent: Optional[Agent] = None
@@ -298,7 +301,9 @@ When users invoke commands (e.g., /analyze), you:
     def coordinate_request(self, user_input: str, 
                           chat_history: Optional[List[ChatMessage]] = None,
                           model: Optional[str] = None,
-                          provider: Optional[str] = None) -> Dict[str, Any]:
+                          provider: Optional[str] = None,
+                          api_base: Optional[str] = None,
+                          api_key: Optional[str] = None) -> Dict[str, Any]:
         """
         Main coordination method - routes request through appropriate agent.
         
@@ -337,6 +342,8 @@ Please process this request:
             agentic_prompt=request.processed_prompt or request.original_input,
             model=model or self.model,
             provider=provider or self.provider,
+            api_base=api_base or self.api_base,
+            api_key=api_key or self.api_key,
             agent_name=agent_name,
             chat_history=chat_history
         )

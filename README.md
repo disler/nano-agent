@@ -108,6 +108,15 @@ uv run nano-cli run "Hello" --model claude-opus-4-1-20250805 --provider anthropi
 uv run nano-cli run "List files" --model gpt-oss:20b --provider ollama
 uv run nano-cli run "List files and count the total number of files and directories" --model gpt-oss:120b --provider ollama
 
+# Test with native Ollama Python client (requires `ollama pull gpt-oss:20b`)
+uv run nano-cli run "List files" --model gpt-oss:20b --provider ollama-native
+uv run nano-cli run "Hello world" --model llama3.2:3b --provider ollama-native
+
+# Use custom API endpoints (overrides environment variables)
+uv run nano-cli run "Hello" --provider ollama --api-base http://remote-ollama:11434 --api-key custom-key
+uv run nano-cli run "Hello" --provider ollama-native --api-base https://remote-ollama.com --api-key auth-token
+uv run nano-cli run "Hello" --provider openai --api-base https://custom-openai-endpoint.com/v1 --api-key sk-custom-key
+
 # Verbose mode (shows token usage)
 uv run nano-cli run "Create and edit a test file" --verbose
 
@@ -322,9 +331,31 @@ When working with UV and optional dependencies:
 cp .env.sample .env
 ```
 
-2. Add your OpenAI API key:
+2. Add your API keys and configuration:
+
+#### Ollama Providers
+The system supports two Ollama providers:
+
+| Provider | Method | Pros | Cons |
+|----------|--------|------|------|
+| `ollama` | OpenAI-compatible HTTP | Faster setup, works like other providers | Basic auth only |
+| `ollama-native` | Native Ollama Python client | Better integration, custom auth, direct API | Requires ollama package |
 ```bash
-echo "OPENAI_API_KEY=sk-your-key-here" > .env
+# Required for OpenAI models (gpt-5-mini, gpt-5-nano, gpt-5)
+echo "OPENAI_API_KEY=sk-your-key-here" >> .env
+
+# Optional: For Anthropic models (claude-*)
+echo "ANTHROPIC_API_KEY=your-anthropic-key" >> .env
+
+# Optional: For custom Ollama setup (defaults to http://localhost:11434)
+echo "OLLAMA_API_URL=http://your-ollama-host:port" >> .env
+echo "OLLAMA_API_KEY=your-ollama-key" >> .env  # Usually not needed for local Ollama
+
+# Optional: For custom LMStudio setup (defaults to http://localhost:1234)
+echo "LMSTUDIO_API_URL=http://your-lmstudio-host:port" >> .env
+echo "LMSTUDIO_API_KEY=your-lmstudio-key" >> .env  # Usually not needed for local LMStudio
+
+# Note: You can also override these at runtime with --api-base and --api-key flags
 ```
 
 ### Running the Server

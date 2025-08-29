@@ -1,0 +1,5 @@
+# Product Mission (Lite)
+
+Nano Agent is a multi-provider LLM benchmarking platform that helps AI engineers and developers evaluate agentic capabilities across cloud and local models by providing standardized testing environments and cost/performance/speed trade-off analysis using the OpenAI Agent SDK.
+
+Nano Agent serves software engineers evaluating LLM integration options and autonomous agent developers building sophisticated systems. Unlike existing evaluation platforms that use different SDKs for each provider, Nano Agent uses the OpenAI Agent SDK for all models (GPT-5, Claude, local models), eliminating implementation bias and providing true performance comparisons. The platform includes first-class support for local models through Ollama and LMStudio integration, plus native MCP protocol implementation for seamless client connectivity.

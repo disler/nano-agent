@@ -94,7 +94,8 @@ class TestProviderConfig:
         """Test creating an Ollama agent."""
         with patch('nano_agent.modules.provider_config.AsyncOpenAI') as MockOpenAI, \
              patch('nano_agent.modules.provider_config.OpenAIChatCompletionsModel') as MockModel, \
-             patch('nano_agent.modules.provider_config.Agent') as MockAgent:
+             patch('nano_agent.modules.provider_config.Agent') as MockAgent, \
+             patch.dict(os.environ, {}, clear=True):  # Clear env vars for testing
             
             mock_client = Mock()
             MockOpenAI.return_value = mock_client
@@ -114,6 +115,7 @@ class TestProviderConfig:
                 model_settings=None
             )
             
+            # Should use default values when env vars not set
             MockOpenAI.assert_called_once_with(
                 base_url="http://localhost:11434/v1",
                 api_key="ollama"
@@ -131,6 +133,76 @@ class TestProviderConfig:
                 model=mock_model,
                 model_settings=None
             )
+            assert agent == mock_agent
+    
+    def test_create_agent_ollama_with_env_vars(self):
+        """Test creating an Ollama agent with custom URL and API key from env vars."""
+        with patch('nano_agent.modules.provider_config.AsyncOpenAI') as MockOpenAI, \
+             patch('nano_agent.modules.provider_config.OpenAIChatCompletionsModel') as MockModel, \
+             patch('nano_agent.modules.provider_config.Agent') as MockAgent, \
+             patch.dict(os.environ, {
+                 'OLLAMA_API_URL': 'http://custom-host:8080',
+                 'OLLAMA_API_KEY': 'custom-key'
+             }):
+            
+            mock_client = Mock()
+            MockOpenAI.return_value = mock_client
+            
+            mock_model = Mock()
+            MockModel.return_value = mock_model
+            
+            mock_agent = Mock()
+            MockAgent.return_value = mock_agent
+            
+            agent = ProviderConfig.create_agent(
+                name="TestAgent",
+                instructions="Test instructions",
+                tools=[],
+                model="gpt-oss:20b",
+                provider="ollama",
+                model_settings=None
+            )
+            
+            # Should use custom values from env vars
+            MockOpenAI.assert_called_once_with(
+                base_url="http://custom-host:8080/v1",
+                api_key="custom-key"
+            )
+            
+            assert agent == mock_agent
+    
+    def test_create_agent_with_custom_api_params(self):
+        """Test creating agents with custom api_base and api_key parameters."""
+        with patch('nano_agent.modules.provider_config.AsyncOpenAI') as MockOpenAI, \
+             patch('nano_agent.modules.provider_config.OpenAIChatCompletionsModel') as MockModel, \
+             patch('nano_agent.modules.provider_config.Agent') as MockAgent:
+            
+            mock_client = Mock()
+            MockOpenAI.return_value = mock_client
+            
+            mock_model = Mock()
+            MockModel.return_value = mock_model
+            
+            mock_agent = Mock()
+            MockAgent.return_value = mock_agent
+            
+            # Test OpenAI with custom params
+            agent = ProviderConfig.create_agent(
+                name="TestAgent",
+                instructions="Test instructions",
+                tools=[],
+                model="gpt-5-mini",
+                provider="openai",
+                model_settings=None,
+                api_base="https://custom-openai.com/v1",
+                api_key="custom-openai-key"
+            )
+            
+            MockOpenAI.assert_called_once_with(
+                base_url="https://custom-openai.com/v1",
+                api_key="custom-openai-key"
+            )
+            
             assert agent == mock_agent
     
     def test_create_agent_invalid_provider(self):

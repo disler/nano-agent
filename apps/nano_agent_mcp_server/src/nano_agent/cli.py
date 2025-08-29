@@ -94,6 +94,8 @@ def run(
     model: str = typer.Option(None, help="Model to use"),
     provider: str = typer.Option(None, help="Provider to use"),
     agent: str = typer.Option(None, help="Agent personality to use"),
+    api_base: str = typer.Option(None, help="API base URL (overrides environment variables)"),
+    api_key: str = typer.Option(None, help="API key (overrides environment variables)"),
     verbose: bool = typer.Option(False, help="Show detailed output")
 ):
     """Run the nano agent with a prompt. Supports /command syntax for command files."""
@@ -151,7 +153,9 @@ def run(
         agentic_prompt=final_prompt,
         model=model,
         provider=provider,
-        agent_name=agent
+        agent_name=agent,
+        api_base=api_base,
+        api_key=api_key
     )
     
     # Execute agent without progress spinner (rich logging will show progress)
@@ -242,6 +246,8 @@ def interactive(
     model: str = typer.Option(None, help="Initial model to use"),
     provider: str = typer.Option(None, help="Initial provider to use"),
     agent: str = typer.Option(None, help="Initial agent personality to use"),
+    api_base: str = typer.Option(None, help="API base URL (overrides environment variables)"),
+    api_key: str = typer.Option(None, help="API key (overrides environment variables)"),
     simple: bool = typer.Option(False, help="Use simple mode without autocompletion")
 ):
     """Run the agent in enhanced interactive mode with autocompletion."""
@@ -270,18 +276,19 @@ def interactive(
     
     # Use simple mode if requested or if prompt_toolkit is not available
     if simple:
-        _run_simple_interactive(model, provider)
+        _run_simple_interactive(model, provider, api_base, api_key)
     else:
         try:
             from .modules.interactive_mode import InteractiveSession
-            session = InteractiveSession(initial_model=model, initial_provider=provider, initial_agent=agent)
+            session = InteractiveSession(initial_model=model, initial_provider=provider, initial_agent=agent, 
+                                        api_base=api_base, api_key=api_key)
             session.run()
         except ImportError:
             console.print("[yellow]Enhanced interactive mode not available. Install with: uv sync[/yellow]")
             console.print("[dim]Falling back to simple mode...[/dim]\n")
-            _run_simple_interactive(model, provider)
+            _run_simple_interactive(model, provider, api_base, api_key)
 
-def _run_simple_interactive(model: str, provider: str):
+def _run_simple_interactive(model: str, provider: str, api_base: str = None, api_key: str = None):
     """Run simple interactive mode without autocompletion."""
     console.print(Panel("[cyan]Nano Agent Interactive Mode (Simple)[/cyan]\nType 'exit' to quit", expand=False))
     
@@ -391,7 +398,9 @@ def _run_simple_interactive(model: str, provider: str):
             request = PromptNanoAgentRequest(
                 agentic_prompt=final_prompt,
                 model=model,
-                provider=provider
+                provider=provider,
+                api_base=api_base,
+                api_key=api_key
             )
             
             # Execute without progress spinner

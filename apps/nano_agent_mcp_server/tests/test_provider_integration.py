@@ -34,7 +34,9 @@ class TestOllamaIntegration:
         # Check if Ollama is running
         import requests
         try:
-            response = requests.get("http://localhost:11434/api/tags", timeout=1)
+            ollama_url = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
+            api_url = ollama_url.rstrip('/').removesuffix('/v1')
+            response = requests.get(f"{api_url}/api/tags", timeout=1)
             models = [m["name"] for m in response.json().get("models", [])]
             if "gpt-oss:20b" not in models:
                 pytest.skip("Model gpt-oss:20b not pulled. Run: ollama pull gpt-oss:20b")
@@ -155,7 +157,9 @@ class TestProviderComparison:
         # Test Ollama if available
         try:
             import requests
-            response = requests.get("http://localhost:11434/api/tags", timeout=1)
+            ollama_url = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
+            api_url = ollama_url.rstrip('/').removesuffix('/v1')
+            response = requests.get(f"{api_url}/api/tags", timeout=1)
             models = [m["name"] for m in response.json().get("models", [])]
             if "gpt-oss:20b" in models:
                 result = await prompt_nano_agent(

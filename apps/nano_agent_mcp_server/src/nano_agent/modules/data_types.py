@@ -33,9 +33,17 @@ class PromptNanoAgentRequest(BaseModel):
         default="gpt-5-mini",
         description="LLM model to use for the agent"
     )
-    provider: Literal["openai", "anthropic", "ollama", "lmstudio"] = Field(
+    provider: Literal["openai", "anthropic", "ollama", "lmstudio", "ollama-native"] = Field(
         default="openai",
         description="LLM provider for the agent"
+    )
+    api_base: Optional[str] = Field(
+        default=None,
+        description="Optional API base URL (overrides environment variables)"
+    )
+    api_key: Optional[str] = Field(
+        default=None,
+        description="Optional API key (overrides environment variables)"
     )
     chat_history: Optional[List[ChatMessage]] = Field(
         default=None,

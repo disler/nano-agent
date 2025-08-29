@@ -62,7 +62,9 @@ class ProviderConfig:
         tools: list,
         model: str,
         provider: str,
-        model_settings: Optional[ModelSettings] = None
+        model_settings: Optional[ModelSettings] = None,
+        api_base: Optional[str] = None,
+        api_key: Optional[str] = None
     ) -> Agent:
         """Create an agent with the appropriate provider configuration.
         
@@ -71,8 +73,10 @@ class ProviderConfig:
             instructions: System instructions for the agent
             tools: List of tool functions
             model: Model identifier
-            provider: Provider name ('openai', 'anthropic', 'ollama','lmstudio')
+            provider: Provider name ('openai', 'anthropic', 'ollama', 'lmstudio', 'ollama-native')
             model_settings: Optional model settings
+            api_base: Optional API base URL (overrides environment variables)
+            api_key: Optional API key (overrides environment variables)
             
         Returns:
             Configured Agent instance
@@ -82,22 +86,40 @@ class ProviderConfig:
         """
         
         if provider == "openai":
-            # Default OpenAI configuration
+            # OpenAI configuration
             logger.debug(f"Creating OpenAI agent with model: {model}")
-            return Agent(
-                name=name,
-                instructions=instructions,
-                tools=tools,
-                model=model,
-                model_settings=model_settings
-            )
+            if api_base or api_key:
+                # Use custom client if api_base or api_key provided
+                openai_client = AsyncOpenAI(
+                    base_url=api_base if api_base else None,
+                    api_key=api_key if api_key else os.getenv("OPENAI_API_KEY")
+                )
+                return Agent(
+                    name=name,
+                    instructions=instructions,
+                    tools=tools,
+                    model=OpenAIChatCompletionsModel(
+                        model=model,
+                        openai_client=openai_client
+                    ),
+                    model_settings=model_settings
+                )
+            else:
+                # Use default OpenAI configuration
+                return Agent(
+                    name=name,
+                    instructions=instructions,
+                    tools=tools,
+                    model=model,
+                    model_settings=model_settings
+                )
         
         elif provider == "anthropic":
             # Use OpenAI SDK with Anthropic's OpenAI-compatible endpoint
             logger.debug(f"Creating Anthropic agent with model: {model}")
             anthropic_client = AsyncOpenAI(
-                base_url="https://api.anthropic.com/v1/",
-                api_key=os.getenv("ANTHROPIC_API_KEY")
+                base_url=api_base if api_base else "https://api.anthropic.com/v1/",
+                api_key=api_key if api_key else os.getenv("ANTHROPIC_API_KEY")
             )
             return Agent(
                 name=name,
@@ -113,9 +135,24 @@ class ProviderConfig:
         elif provider == "ollama":
             # Use OpenAI-compatible endpoint for Ollama
             logger.debug(f"Creating Ollama agent with model: {model}")
+            
+            # Use provided api_base or fall back to environment variable or default
+            if api_base:
+                ollama_url = api_base
+            else:
+                ollama_url = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
+            
+            # Ensure URL ends with /v1 for OpenAI compatibility
+            if not ollama_url.endswith("/v1"):
+                ollama_url = f"{ollama_url.rstrip('/')}/v1"
+            
+            # Use provided api_key or fall back to environment variable or default
+            ollama_api_key = api_key if api_key else os.getenv("OLLAMA_API_KEY", "ollama")
+            
+            logger.debug(f"Ollama URL: {ollama_url}")
             ollama_client = AsyncOpenAI(
-                base_url="http://localhost:11434/v1",
-                api_key="ollama"  # Dummy key required by client
+                base_url=ollama_url,
+                api_key=ollama_api_key
             )
             return Agent(
                 name=name,
@@ -130,9 +167,23 @@ class ProviderConfig:
         elif provider == "lmstudio":
             # Use OpenAI-compatible endpoint for LMStudio
             logger.debug(f"Creating LMStudio agent with model: {model}")
+            
+            # Use provided api_base or fall back to environment variable or default
+            if api_base:
+                lmstudio_url = api_base
+            else:
+                lmstudio_url = os.getenv("LMSTUDIO_API_URL", "http://localhost:1234")
+            
+            # Ensure URL ends with /v1 for OpenAI compatibility
+            if not lmstudio_url.endswith("/v1"):
+                lmstudio_url = f"{lmstudio_url.rstrip('/')}/v1"
+            
+            # Use provided api_key or fall back to environment variable or default
+            lmstudio_api_key = api_key if api_key else os.getenv("LMSTUDIO_API_KEY", "lmstudio")
+            
             lmstudio_client = AsyncOpenAI(
-                base_url="http://localhost:1234/v1",
-                api_key="lmstudio"  # Dummy key required by client
+                base_url=lmstudio_url,
+                api_key=lmstudio_api_key
             )
             return Agent(
                 name=name,
@@ -141,6 +192,47 @@ class ProviderConfig:
                 model=OpenAIChatCompletionsModel(
                     model=model,
                     openai_client=lmstudio_client
+                ),
+                model_settings=model_settings
+            )
+        elif provider == "ollama-native":
+            # Use native Ollama Python client with wrapper
+            logger.debug(f"Creating Ollama-native agent with model: {model}")
+            
+            from .ollama_wrapper import AsyncOllamaOpenAIWrapper
+            
+            # Use provided api_base or fall back to environment variable or default
+            if api_base:
+                ollama_host = api_base
+            else:
+                ollama_host = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
+            
+            # Remove /v1 suffix if present since native Ollama doesn't use it
+            if ollama_host.endswith("/v1"):
+                ollama_host = ollama_host.rstrip("/v1")
+            
+            # Prepare headers with API key if provided
+            headers = {}
+            if api_key:
+                headers['Authorization'] = api_key
+            elif os.getenv("OLLAMA_API_KEY"):
+                headers['Authorization'] = os.getenv("OLLAMA_API_KEY")
+            
+            logger.debug(f"Ollama-native host: {ollama_host}")
+            
+            # Create wrapped client
+            ollama_client = AsyncOllamaOpenAIWrapper(
+                host=ollama_host,
+                headers=headers if headers else None
+            )
+            
+            return Agent(
+                name=name,
+                instructions=instructions,
+                tools=tools,
+                model=OpenAIChatCompletionsModel(
+                    model=model,
+                    openai_client=ollama_client
                 ),
                 model_settings=model_settings
             )
@@ -160,6 +252,10 @@ class ProviderConfig:
             set_tracing_disabled(True)
         elif provider == "lmstudio":
             # Always disable tracing for LMStudio since it runs locally
+            logger.info(f"Disabling tracing for {provider} provider (local model)")
+            set_tracing_disabled(True)
+        elif provider == "ollama-native":
+            # Always disable tracing for Ollama-native since it runs locally
             logger.info(f"Disabling tracing for {provider} provider (local model)")
             set_tracing_disabled(True)
         elif provider != "openai":
@@ -201,7 +297,11 @@ class ProviderConfig:
         # Check Ollama availability
         if provider == "ollama":
             try:
-                response = requests.get("http://localhost:11434/api/tags", timeout=1)
+                # Get Ollama URL from environment variable with default
+                ollama_url = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
+                # Remove /v1 suffix if present for API endpoint
+                api_url = ollama_url.rstrip('/').removesuffix('/v1')
+                response = requests.get(f"{api_url}/api/tags", timeout=1)
                 models = [m["name"] for m in response.json().get("models", [])]
                 if model not in models:
                     return False, f"Model {model} not pulled in Ollama. Run: ollama pull {model}"
@@ -211,6 +311,29 @@ class ProviderConfig:
                 return False, "Ollama service timeout. Check if service is running: ollama serve"
             except Exception as e:
                 return False, f"Error checking Ollama availability: {str(e)}"
+        
+        elif provider == "ollama-native":
+            # Check Ollama-native availability using native client
+            try:
+                import ollama
+                
+                # Get Ollama URL from environment variable with default
+                ollama_host = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
+                # Remove /v1 suffix if present since native doesn't use it
+                if ollama_host.endswith("/v1"):
+                    ollama_host = ollama_host.rstrip("/v1")
+                
+                client = ollama.Client(host=ollama_host)
+                models_info = client.list()
+                # Ollama client returns ListResponse with .models attribute containing Model objects
+                model_names = [m.model for m in models_info.models] if hasattr(models_info, 'models') else []
+                
+                if model not in model_names:
+                    return False, f"Model {model} not pulled in Ollama. Run: ollama pull {model}"
+            except ImportError:
+                return False, "Ollama Python package not installed. Run: pip install ollama"
+            except Exception as e:
+                return False, f"Error checking Ollama-native availability: {str(e)}"
         
         elif provider == "lmstudio":
             # Check LMStudio availability

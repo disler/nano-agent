@@ -1,4 +1,6 @@
 # Configuration files
+.cursor
+.claude
 .mcp.json
 
 # Python

@@ -17,6 +17,7 @@ dependencies = [
     "python-dotenv>=1.0.0",
     "prompt-toolkit>=3.0.0", # For enhanced interactive mode with autocompletion
     "pyyaml>=6.0.2",
+    "ollama>=0.1.0", # Native Ollama Python client
 ]
 
 [project.optional-dependencies]

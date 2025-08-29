@@ -20,6 +20,7 @@ AVAILABLE_MODELS = {
     ],
     "ollama": ["gpt-oss:20b", "gpt-oss:120b"],
     "lmstudio": ["qwen/qwen3-coder-30b", "openai/gpt-oss-20b"],
+    "ollama-native": ["gpt-oss:20b", "gpt-oss:120b", "llama3.2:3b", "codellama:7b"],
 }
 
 # Model Display Names and Descriptions
@@ -43,6 +44,7 @@ PROVIDER_REQUIREMENTS = {
     "anthropic": "ANTHROPIC_API_KEY",
     "ollama": None,  # No API key needed
     "lmstudio": None,  # No API key needed
+    "ollama-native": None,  # No API key needed
 }
 
 # Agent Configuration
@@ -100,7 +102,7 @@ If asked about general information, respond and do not use any tools.
 # Error Messages
 ERROR_NO_API_KEY = "{} environment variable is not set"
 ERROR_PROVIDER_NOT_SUPPORTED = (
-    "Provider '{}' not supported. Available providers: openai, anthropic, ollama"
+    "Provider '{}' not supported. Available providers: openai, anthropic, ollama, lmstudio, ollama-native"
 )
 ERROR_FILE_NOT_FOUND = "Error: File not found: {}"
 ERROR_NOT_A_FILE = "Error: Path is not a file: {}"

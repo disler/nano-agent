@@ -24,7 +24,6 @@ from rich.table import Table
 
 from .command_loader import CommandLoader, parse_command_syntax
 from .agent_loader import AgentLoader
-from .coordinator import CoordinatorAgent
 from .nano_agent import _execute_nano_agent
 from .data_types import PromptNanoAgentRequest, ChatMessage
 from .constants import DEFAULT_MODEL, DEFAULT_PROVIDER, AVAILABLE_MODELS
@@ -142,10 +141,13 @@ class InteractiveSession:
     """Enhanced interactive session for nano-agent."""
     
     def __init__(self, initial_model: str = DEFAULT_MODEL, initial_provider: str = DEFAULT_PROVIDER, 
-                 initial_agent: Optional[str] = None):
+                 initial_agent: Optional[str] = None, api_base: Optional[str] = None, 
+                 api_key: Optional[str] = None):
         """Initialize the interactive session."""
         self.model = initial_model
         self.provider = initial_provider
+        self.api_base = api_base
+        self.api_key = api_key
         self.verbose = False
         self.loader = CommandLoader()
         self.agent_loader = AgentLoader()
@@ -153,8 +155,7 @@ class InteractiveSession:
         self.history_file = Path.home() / ".nano-cli" / "history.txt"
         self._ensure_history_dir()
         
-        # Initialize coordinator agent
-        self.coordinator = CoordinatorAgent(model=initial_model, provider=initial_provider)
+        # No coordinator - we'll call the agent directly
         
         # Chat history for maintaining conversation context
         self.chat_history = []  # List of ChatMessage objects
@@ -803,41 +804,35 @@ class InteractiveSession:
                 # Add user message to chat history
                 self.chat_history.append(ChatMessage(role="user", content=user_input))
                 
-                # Route through coordinator agent (synchronous)
-                response_dict = self.coordinator.coordinate_request(
-                    user_input=user_input,
-                    chat_history=self.chat_history if len(self.chat_history) > 1 else None,
+                # Create request and execute directly
+                request = PromptNanoAgentRequest(
+                    agentic_prompt=user_input,
                     model=self.model,
-                    provider=self.provider
+                    provider=self.provider,
+                    api_base=self.api_base,
+                    api_key=self.api_key,
+                    chat_history=self.chat_history if len(self.chat_history) > 1 else None
                 )
+                response = _execute_nano_agent(request, enable_rich_logging=True)
                 
                 # Display response
-                if response_dict.get('success'):
-                    result = response_dict.get('result', '')
+                if response.success:
+                    result = response.result or ''
                     # Add assistant response to chat history
                     self.chat_history.append(ChatMessage(role="assistant", content=result))
                     
-                    # Check if coordinator added metadata
-                    metadata = response_dict.get('metadata', {})
-                    coordinator_info = metadata.get('coordinator', {})
-                    
-                    # Display agent attribution if not default
-                    title = "💬 Agent Response"
-                    if coordinator_info.get('selected_agent') and coordinator_info['selected_agent'] != 'default':
-                        title = f"💬 {coordinator_info['selected_agent'].title()} Agent"
-                    
                     console.print(Panel(
                         result,
-                        title=title,
+                        title="💬 Agent Response",
                         border_style="cyan",
                         expand=False
                     ))
                     
-                    if self.verbose and metadata:
+                    if self.verbose and response.metadata:
                         import json
-                        metadata_copy = metadata.copy()
-                        if 'execution_time_seconds' in response_dict:
-                            metadata_copy["execution_time_seconds"] = round(response_dict['execution_time_seconds'], 2)
+                        metadata_copy = response.metadata.copy()
+                        if response.execution_time_seconds:
+                            metadata_copy["execution_time_seconds"] = round(response.execution_time_seconds, 2)
                         
                         console.print(Panel(
                             json.dumps(metadata_copy, indent=2),
@@ -846,7 +841,7 @@ class InteractiveSession:
                             expand=False
                         ))
                 else:
-                    error = response_dict.get('error', 'Unknown error')
+                    error = response.error or 'Unknown error'
                     console.print(Panel(
                         error,
                         title="❌ Error",

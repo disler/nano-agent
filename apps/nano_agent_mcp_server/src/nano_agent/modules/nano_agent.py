@@ -356,7 +356,9 @@ async def _execute_nano_agent_async(request: PromptNanoAgentRequest, enable_rich
             tools=tools,
             model=request.model,
             provider=request.provider,
-            model_settings=model_settings
+            model_settings=model_settings,
+            api_base=request.api_base,
+            api_key=request.api_key
         )
         
         # Create token tracker and hooks for rich logging if enabled
@@ -518,7 +520,9 @@ def _execute_nano_agent(request: PromptNanoAgentRequest, enable_rich_logging: bo
             tools=get_nano_agent_tools(),
             model=request.model,
             provider=request.provider,
-            model_settings=model_settings
+            model_settings=model_settings,
+            api_base=request.api_base,
+            api_key=request.api_key
         )
         
         # Create token tracker and hooks for rich logging if enabled
