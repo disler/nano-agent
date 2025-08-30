@@ -1,11 +1,93 @@
-# Nano Agent
+# Nano Agent - Enhanced Fork
 > Watched how we used GPT-5 and Claude Code with nano-agents [here](https://youtu.be/tcZ3W8QYirQ).
+
+## 🙏 Attribution & Thanks
+
+**This is a fork of [disler/nano-agent](https://github.com/disler/nano-agent)** - We're incredibly grateful to [@disler](https://github.com/disler) for creating the original nano-agent concept and foundational implementation. His work provided the perfect starting point for our enhancements.
+
+### 🚀 What We Added Beyond the Original POC
+
+While disler's nano-agent provided an excellent foundation, this enhanced fork includes:
+
+**🔐 Production Security & Permissions:**
+- Fine-grained tool restrictions (`allowed_tools`, `blocked_tools`)
+- Path-based access control (`allowed_paths`, `blocked_paths`) 
+- Read-only mode for safe code exploration
+- Comprehensive permission validation system
+
+**💬 Session Management:**
+- Persistent conversation history across requests
+- Session-aware context preservation
+- Token usage tracking per session
+- Multi-session project management
+
+**🛠️ Enhanced MCP Server:**
+- 6 comprehensive MCP tools (vs. original 1)
+- Advanced model configuration (temperature, max_tokens)
+- Multi-provider session persistence
+- Detailed execution metadata and error handling
+
+**📦 Production Installation:**
+- Cross-platform installation scripts (macOS, Linux, Windows)
+- Automatic Claude Desktop integration
+- Interactive API key configuration
+- Comprehensive troubleshooting guides
+
+**📚 Complete Documentation:**
+- Platform-specific setup instructions
+- Security best practices and usage examples
+- Comprehensive usage guide with real-world scenarios
+- Production deployment guidance
+
+---
 
 **What?** A MCP Server for experimental, small scale engineering agents with multi-provider LLM support.
 
 **Why?** To test and compare **Agentic** Capabilities of Cloud and Local LLMs across Performance, Speed, and Cost.
 
 > "It's not about a single prompt call anymore. It's about how well your agent chains together multiple tools to accomplish real engineering results on your behalf." - From our evaluation
+
+## TLDR - Quick Start
+
+### For End Users (Production Setup)
+**Get nano-agent running with Claude Desktop in 5 minutes:**
+
+```bash
+# Quick install (Unix/Linux/macOS)
+curl -fsSL https://raw.githubusercontent.com/meirm/nano-agent/main/apps/nano_agent_mcp_server/install.sh | bash
+
+# Or download and run locally
+wget https://raw.githubusercontent.com/meirm/nano-agent/main/apps/nano_agent_mcp_server/install.sh
+chmod +x install.sh && ./install.sh
+
+# Windows PowerShell
+iwr https://raw.githubusercontent.com/meirm/nano-agent/main/apps/nano_agent_mcp_server/install.ps1 | iex
+```
+
+**What you get:**
+- ✅ Full installation with dependencies (Python, uv, nano-agent)
+- ✅ Automatic Claude Desktop integration
+- ✅ API key configuration (OpenAI, Anthropic, Ollama)
+- ✅ Ready-to-use nano-agent tools in Claude Desktop
+
+### For Developers (Development Setup)
+**Clone and develop:**
+
+```bash
+git clone https://github.com/meirm/nano-agent
+cd nano-agent/apps/nano_agent_mcp_server
+cp .env.sample .env  # Add your API keys
+uv sync --extra test
+./scripts/install.sh && uv tool install -e .
+```
+
+### Usage
+**In Claude Desktop:** Look for the 🔌 icon, then try:
+- "Use nano-agent to create a hello world script"
+- "Use nano-agent to analyze this project structure"  
+- "Use nano-agent to implement user authentication"
+
+**CLI:** `uv run nano-cli run "Your prompt here" --model gpt-5-nano`
 
 <img src="images/nano-agent.png" alt="Nano Agent" style="max-width: 800px;">
 
@@ -26,43 +108,323 @@
 
 ## Installation
 
-### Quick Install (Recommended)
+### Production Installation (End Users)
 
-- Install [Astral UV](https://docs.astral.sh/uv/getting-started/installation/)
-- Setup [Claude Code](https://docs.anthropic.com/en/docs/claude-code/overview)
-- Setup [Ollama](https://ollama.com/)
-- Get your OpenAI API key and Anthropic API key
-- Setup dotenv
-  - `cp ./.env.sample ./.env` and fill out variables
-  - `cp ./apps/nano_agent_mcp_server/.env.sample ./apps/nano_agent_mcp_server/.env` and fill out variables
-- Clone the repository
-  - `git clone https://github.com/disler/nano-agent`
-- Global Install `nano-agent` to expose it for Claude Code (any mcp client)
-  - `cd nano-agent/apps/nano_agent_mcp_server`
-  - `./scripts/install.sh`
-  - `uv tool install -e .`
-- cp `.mcp.json.sample` to `.mcp.json` to use `nano-agent`
-- You should end up with a `.mcp.json` file that looks like this:
-```json
-{
-  "mcpServers": {
-    "nano-agent": {
-      "command": "nano-agent",
-      "args": []
-    }
-  }
-}
+**For users who want to use nano-agent with Claude Desktop or other MCP clients.**
+
+## 🍎 macOS Installation
+
+### Prerequisites
+- **Python 3.9+**: Install from [python.org](https://python.org) or use Homebrew:
+  ```bash
+  brew install python@3.12
+  ```
+- **Homebrew** (optional but recommended): Install from [brew.sh](https://brew.sh)
+
+### Automated Installation
+```bash
+# Direct install
+curl -fsSL https://raw.githubusercontent.com/meirm/nano-agent/main/apps/nano_agent_mcp_server/install.sh | bash
+
+# Or download and review first
+curl -fsSL https://raw.githubusercontent.com/meirm/nano-agent/main/apps/nano_agent_mcp_server/install.sh -o install.sh
+chmod +x install.sh && ./install.sh
 ```
-- You can also test without installing `nano-agent` globally by running it this directory with
-```json
-{
-  "mcpServers": {
-    "nano-agent": {
-      "command": "uv",
-      "args": ["--directory", "apps/nano_agent_mcp_server", "run", "nano-agent"]
-    }
-  }
-}
+
+### Manual Installation
+```bash
+# Install uv package manager
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.cargo/bin:$PATH"
+
+# Clone and install nano-agent
+git clone https://github.com/meirm/nano-agent
+cd nano-agent/apps/nano_agent_mcp_server
+cp .env.sample .env  # Add your API keys
+uv sync
+uv tool install --force .
+```
+
+### Claude Desktop Configuration
+1. **Create/edit configuration file:**
+   ```bash
+   mkdir -p "$HOME/Library/Application Support/Claude"
+   nano "$HOME/Library/Application Support/Claude/claude_desktop_config.json"
+   ```
+
+2. **Add nano-agent configuration:**
+   ```json
+   {
+     "mcpServers": {
+       "nano-agent": {
+         "command": "nano-agent",
+         "args": [],
+         "env": {
+           "NANO_AGENT_MCP_MODE": "true"
+         }
+       }
+     }
+   }
+   ```
+
+3. **Restart Claude Desktop** and look for the 🔌 icon
+
+### API Key Configuration (macOS)
+```bash
+# Edit environment file
+nano ~/.nano-agent/nano-agent/apps/nano_agent_mcp_server/.env
+
+# Add your keys:
+OPENAI_API_KEY=sk-your-openai-key-here
+ANTHROPIC_API_KEY=your-anthropic-key-here  # Optional
+OLLAMA_API_URL=http://localhost:11434      # Optional, for local models
+```
+
+---
+
+## 🐧 Linux Installation
+
+### Prerequisites  
+- **Python 3.9+**: Install via package manager:
+  ```bash
+  # Ubuntu/Debian
+  sudo apt update && sudo apt install python3.12 python3.12-pip
+  
+  # CentOS/RHEL/Fedora
+  sudo dnf install python3.12 python3.12-pip
+  
+  # Arch Linux
+  sudo pacman -S python
+  ```
+- **curl/wget**: Usually pre-installed
+
+### Automated Installation
+```bash
+# Direct install
+curl -fsSL https://raw.githubusercontent.com/meirm/nano-agent/main/apps/nano_agent_mcp_server/install.sh | bash
+
+# Or with wget
+wget -qO- https://raw.githubusercontent.com/meirm/nano-agent/main/apps/nano_agent_mcp_server/install.sh | bash
+
+# Or download and review first
+wget https://raw.githubusercontent.com/meirm/nano-agent/main/apps/nano_agent_mcp_server/install.sh
+chmod +x install.sh && ./install.sh
+```
+
+### Manual Installation
+```bash
+# Install uv package manager
+curl -LsSf https://astral.sh/uv/install.sh | sh
+export PATH="$HOME/.cargo/bin:$PATH"
+
+# Add to your shell profile
+echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
+
+# Clone and install nano-agent
+git clone https://github.com/meirm/nano-agent
+cd nano-agent/apps/nano_agent_mcp_server
+cp .env.sample .env  # Add your API keys
+uv sync
+uv tool install --force .
+```
+
+### Claude Desktop Configuration
+1. **Create/edit configuration file:**
+   ```bash
+   mkdir -p ~/.config/Claude
+   nano ~/.config/Claude/claude_desktop_config.json
+   ```
+
+2. **Add nano-agent configuration:**
+   ```json
+   {
+     "mcpServers": {
+       "nano-agent": {
+         "command": "nano-agent",
+         "args": [],
+         "env": {
+           "NANO_AGENT_MCP_MODE": "true"
+         }
+       }
+     }
+   }
+   ```
+
+3. **Restart Claude Desktop** and look for the 🔌 icon
+
+### API Key Configuration (Linux)
+```bash
+# Edit environment file
+nano ~/.nano-agent/nano-agent/apps/nano_agent_mcp_server/.env
+
+# Add your keys:
+OPENAI_API_KEY=sk-your-openai-key-here
+ANTHROPIC_API_KEY=your-anthropic-key-here  # Optional
+OLLAMA_API_URL=http://localhost:11434      # Optional, for local models
+```
+
+---
+
+## 🪟 Windows Installation
+
+### Prerequisites
+- **Python 3.9+**: Download from [python.org](https://python.org/downloads/windows/)
+  - ✅ Check "Add Python to PATH" during installation
+  - ✅ Check "Install pip" during installation
+- **PowerShell 5.1+**: Pre-installed on Windows 10/11
+
+### Automated Installation
+**PowerShell (Run as Administrator recommended):**
+```powershell
+# Direct install
+iwr https://raw.githubusercontent.com/meirm/nano-agent/main/apps/nano_agent_mcp_server/install.ps1 | iex
+
+# Or download and review first
+iwr -Uri https://raw.githubusercontent.com/meirm/nano-agent/main/apps/nano_agent_mcp_server/install.ps1 -OutFile install.ps1
+.\install.ps1
+```
+
+### Manual Installation
+**PowerShell:**
+```powershell
+# Install uv package manager
+Invoke-WebRequest -Uri "https://astral.sh/uv/install.ps1" -UseBasicParsing | Invoke-Expression
+
+# Add to PATH (restart terminal after this)
+$env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
+
+# Clone and install nano-agent
+git clone https://github.com/meirm/nano-agent
+cd nano-agent\apps\nano_agent_mcp_server
+cp .env.sample .env  # Add your API keys
+uv sync
+uv tool install --force .
+```
+
+### Claude Desktop Configuration  
+1. **Create configuration directory:**
+   ```powershell
+   New-Item -Path "$env:APPDATA\Claude" -ItemType Directory -Force
+   ```
+
+2. **Create/edit configuration file:**
+   ```powershell
+   notepad "$env:APPDATA\Claude\claude_desktop_config.json"
+   ```
+
+3. **Add nano-agent configuration:**
+   ```json
+   {
+     "mcpServers": {
+       "nano-agent": {
+         "command": "nano-agent",
+         "args": [],
+         "env": {
+           "NANO_AGENT_MCP_MODE": "true"
+         }
+       }
+     }
+   }
+   ```
+
+4. **Restart Claude Desktop** and look for the 🔌 icon
+
+### API Key Configuration (Windows)
+**PowerShell:**
+```powershell
+# Edit environment file
+notepad "$env:USERPROFILE\.nano-agent\nano-agent\apps\nano_agent_mcp_server\.env"
+
+# Add your keys:
+# OPENAI_API_KEY=sk-your-openai-key-here
+# ANTHROPIC_API_KEY=your-anthropic-key-here  # Optional
+# OLLAMA_API_URL=http://localhost:11434      # Optional, for local models
+```
+
+---
+
+## ✅ Installation Verification
+
+### Test CLI Installation
+```bash
+# Test nano-agent command
+nano-agent --help
+
+# Test CLI interface
+nano-cli run "What is 2+2?" --model gpt-5-mini
+
+# Test tools without API
+nano-cli test-tools
+```
+
+### Test Claude Desktop Integration
+1. **Restart Claude Desktop** after configuration
+2. **Look for the 🔌 icon** in the interface
+3. **Try a test prompt:**
+   - "Use nano-agent to create a hello world script"
+   - "Use nano-agent to list files in the current directory"
+
+### Troubleshooting
+
+**Command not found:**
+- **macOS/Linux**: Add `export PATH="$HOME/.cargo/bin:$PATH"` to your shell profile
+- **Windows**: Restart PowerShell/Command Prompt after installation
+
+**Claude Desktop not showing 🔌 icon:**
+- Verify configuration file location and syntax
+- Check that `nano-agent` command works from terminal
+- Restart Claude Desktop completely
+
+**Permission errors:**
+- **macOS/Linux**: Run installer with proper permissions, avoid `sudo` with `uv`
+- **Windows**: Run PowerShell as Administrator for installation
+
+**API errors:**
+- Verify API keys are correctly set in `.env` file
+- Test with `nano-cli run "hello" --verbose` to see detailed error messages
+
+---
+
+## 📦 What Gets Installed
+
+- **nano-agent**: Main MCP server command
+- **nano-cli**: Interactive CLI interface  
+- **Configuration**: `~/.nano-cli/` directory with settings
+- **Installation**: `~/.nano-agent/` directory with program files
+- **Dependencies**: Python packages via uv tool environment
+
+### Development Installation (Developers)
+
+**For contributors and developers working on nano-agent itself.**
+
+#### Prerequisites
+- Python 3.12+ (required for proper typing support)
+- [uv](https://github.com/astral-sh/uv) package manager
+- OpenAI API key (for GPT-5 model tests)
+
+#### Setup
+```bash
+# Clone the repository
+git clone https://github.com/meirm/nano-agent
+cd nano-agent/apps/nano_agent_mcp_server
+
+# Install dependencies with test support
+uv sync --extra test
+
+# Setup environment
+cp .env.sample .env  # Add your API keys
+
+# Install for development
+./scripts/install.sh
+uv tool install -e .
+```
+
+#### Claude Code Integration (Optional)
+For enhanced development with Claude Code:
+```bash
+# Convert hook paths to absolute paths
+/convert_paths_absolute.md
 ```
 
 Now you can follow the [Nano Agent Interaction section below](#nano-agent-interaction) to test out the nano agent.
@@ -122,6 +484,31 @@ uv run nano-cli run "Create and edit a test file" --verbose
 
 # Interactive mode with autocompletion and /commands
 uv run nano-cli interactive
+
+# NEW Claude-inspired Session Management Features
+
+# Continue your last conversation with context
+uv run nano-cli run "Add error handling to that function" --continue
+
+# Use a specific session
+uv run nano-cli run "Update the code" --session session_20250129_143022_a1b2c3
+
+# Fine-tune model behavior
+uv run nano-cli run "Write a creative story" --temperature 1.5 --max-tokens 1000
+
+# Disable rich formatting for simpler output
+uv run nano-cli run "Simple task" --no-rich
+
+# Don't save to session history
+uv run nano-cli run "Temporary task" --no-save
+
+# Force a new session
+uv run nano-cli run "Start fresh project" --new
+
+# Session management commands
+uv run nano-cli sessions list                    # List recent sessions
+uv run nano-cli sessions show --id <session_id>  # View session details
+uv run nano-cli sessions clear --days 30         # Clear old sessions
 ```
 
 ### Through Claude Code
@@ -196,6 +583,95 @@ This architecture ensures fair comparison by using the same OpenAI Agent SDK for
 - 📦 **Experiment Ready**: Decent testing, error handling, and token tracking
 - 🚀 **Easy Integration**: Works with Claude Desktop, or as a CLI
 - 📝 **Command Files**: Reusable prompt templates via `~/.nano-cli/commands/` (similar to Claude Code)
+- 💬 **Session Management**: Persistent conversation history with context preservation (Claude-inspired)
+- 🎛️ **Fine-tuned Control**: Temperature, max tokens, and other model parameters
+- 🔄 **Context Continuity**: Resume previous conversations with `--continue` flag
+
+## Claude-Inspired Session Management 💬
+
+The nano-cli now includes powerful session management features inspired by Claude CLI, enabling persistent conversations with context preservation across commands.
+
+### Key Session Features
+
+#### 1. **Conversation Persistence**
+Sessions automatically save your conversation history, allowing you to continue where you left off:
+```bash
+# First command creates a session
+uv run nano-cli run "Create a Python web scraper" --save
+
+# Continue with context (agent remembers the web scraper)
+uv run nano-cli run "Add error handling" --continue
+uv run nano-cli run "Add rate limiting" --continue
+```
+
+#### 2. **Session Management**
+Organize and manage multiple conversation sessions:
+```bash
+# List all sessions with metadata
+uv run nano-cli sessions list
+
+# View specific session history
+uv run nano-cli sessions show --id session_20250129_143022_a1b2c3
+
+# Clear old sessions
+uv run nano-cli sessions clear --days 30
+```
+
+#### 3. **Fine-tuned Control**
+Adjust model behavior per request:
+```bash
+# High creativity for creative tasks
+uv run nano-cli run "Write a poem" --temperature 1.8
+
+# Low creativity for technical tasks
+uv run nano-cli run "Write API docs" --temperature 0.2
+
+# Limit response length
+uv run nano-cli run "Summarize this" --max-tokens 500
+```
+
+#### 4. **Session Workflows**
+
+**Iterative Development:**
+```bash
+# Start a project
+uv run nano-cli run "Create a Flask API" --new
+
+# Iterate with context
+uv run nano-cli run "Add user authentication" --continue
+uv run nano-cli run "Add input validation" --continue
+uv run nano-cli run "Write unit tests" --continue
+```
+
+**Multiple Projects:**
+```bash
+# Project A
+uv run nano-cli run "React dashboard" --new
+# Returns: session_20250129_143022_a1b2c3
+
+# Project B
+uv run nano-cli run "Python script" --new  
+# Returns: session_20250129_144533_d4e5f6
+
+# Continue specific project
+uv run nano-cli run "Add charts" --session session_20250129_143022_a1b2c3
+```
+
+### Session Storage
+
+Sessions are stored in `~/.nano-cli/sessions/` as JSON files containing:
+- Complete conversation history
+- Token usage and cost tracking
+- Provider and model settings
+- Timestamps and metadata
+
+### Benefits
+
+- **No Context Repetition**: Agent remembers previous conversation
+- **Project Organization**: Keep different projects in separate sessions
+- **Cost Tracking**: Monitor token usage per session
+- **Provider Persistence**: Sessions remember your model/provider settings
+- **Flexible Control**: Temperature and token limits per request
 
 ## Nano-Agent Tools
 > Feel free to add/remove/improve tools as you see fit.
@@ -224,6 +700,7 @@ nano-agent/
 │       │       │   ├── nano_agent.py        # Main agent execution logic
 │       │       │   ├── nano_agent_tools.py  # Internal agent tool implementations
 │       │       │   ├── provider_config.py   # Multi-provider configuration
+│       │       │   ├── session_manager.py   # Session persistence & management (NEW)
 │       │       │   ├── token_tracking.py    # Token usage & cost tracking
 │       │       │   └── typing_fix.py        # Type compatibility fixes
 │       │       ├── __main__.py     # MCP server entry point
@@ -312,7 +789,7 @@ A backup is automatically created at .claude/settings.json.backup
 - Session tracking
 - Event logging for debugging
 
-For production use, see [Installation](#installation) section above.
+For production use, see [Production Installation](#production-installation-end-users) section above.
 
 #### UV Dependency Management
 

@@ -8,6 +8,7 @@ available to the agent during execution.
 
 import os
 import logging
+import asyncio
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Dict, Any
@@ -20,6 +21,16 @@ except ImportError:
     # Fallback if agents SDK not available
     def function_tool(func):
         return func
+
+# Import hook system (optional - gracefully degrade if not available)
+try:
+    from .hook_types import HookEvent, HookEventData
+    from .hook_manager import get_hook_manager
+    HOOKS_AVAILABLE = True
+except ImportError:
+    HOOKS_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.debug("Hooks system not available")
 
 from .data_types import (
     ReadFileRequest,
@@ -499,17 +510,116 @@ def capture_args(tool_name: str, **kwargs):
     _pending_tool_args[tool_name] = kwargs
     logger.debug(f"Captured args for {tool_name}: {kwargs}")
 
+
+# Async wrapper functions with hook support
+async def _execute_tool_with_hooks(tool_name: str, tool_func, tool_kwargs: Dict[str, Any]) -> Any:
+    """Execute a tool with hook support.
+    
+    Args:
+        tool_name: Name of the tool being executed
+        tool_func: The actual tool function to execute
+        tool_kwargs: Arguments for the tool
+        
+    Returns:
+        Tool execution result
+    """
+    if not HOOKS_AVAILABLE:
+        # No hooks available, execute directly
+        return tool_func()
+    
+    try:
+        hook_manager = get_hook_manager()
+        
+        # Prepare event data
+        event_data = HookEventData(
+            event="pre_tool_use",
+            timestamp=datetime.now().isoformat(),
+            context=hook_manager.context,
+            working_dir=os.getcwd(),
+            tool_name=tool_name,
+            tool_args=tool_kwargs
+        )
+        
+        # Trigger pre-tool hook
+        pre_result = await hook_manager.trigger_hook(
+            HookEvent.PRE_TOOL_USE,
+            event_data,
+            blocking=True
+        )
+        
+        # Check if execution was blocked
+        if pre_result.blocked:
+            error_msg = pre_result.blocking_reason or "Tool execution blocked by hook"
+            logger.warning(f"Tool {tool_name} blocked: {error_msg}")
+            return f"Error: {error_msg}"
+        
+        # Execute the tool
+        try:
+            result = tool_func()
+            
+            # Trigger post-tool hook
+            event_data.tool_result = result
+            await hook_manager.trigger_hook(
+                HookEvent.POST_TOOL_USE,
+                event_data
+            )
+            
+            return result
+            
+        except Exception as e:
+            # Trigger tool error hook
+            event_data.error = str(e)
+            await hook_manager.trigger_hook(
+                HookEvent.TOOL_ERROR,
+                event_data
+            )
+            raise
+            
+    except Exception as e:
+        logger.error(f"Error in hook execution for {tool_name}: {e}")
+        # Fall back to direct execution if hooks fail
+        return tool_func()
+
+
+def run_async(coro):
+    """Helper to run async function in sync context."""
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # If loop is already running (e.g., in Jupyter), create task
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as executor:
+                future = executor.submit(asyncio.run, coro)
+                return future.result()
+        else:
+            return loop.run_until_complete(coro)
+    except RuntimeError:
+        # No event loop, create one
+        return asyncio.run(coro)
+
 # Decorated tool functions for OpenAI Agent SDK
 @function_tool
 def read_file(file_path: str) -> str:
     """Read the contents of a file."""
     capture_args("read_file", file_path=file_path)
+    if HOOKS_AVAILABLE:
+        return run_async(_execute_tool_with_hooks(
+            "read_file",
+            lambda: read_file_raw(file_path),
+            {"file_path": file_path}
+        ))
     return read_file_raw(file_path)
 
 @function_tool
 def write_file(file_path: str, content: str) -> str:
     """Write content to a file."""
     capture_args("write_file", file_path=file_path, content=content)
+    if HOOKS_AVAILABLE:
+        return run_async(_execute_tool_with_hooks(
+            "write_file",
+            lambda: write_file_raw(file_path, content),
+            {"file_path": file_path, "content": content}
+        ))
     return write_file_raw(file_path, content)
 
 @function_tool
@@ -519,12 +629,26 @@ def list_directory(directory_path: Optional[str] = None) -> str:
         capture_args("list_directory", directory_path=directory_path)
     else:
         capture_args("list_directory", directory_path="<current working directory>")
+    
+    if HOOKS_AVAILABLE:
+        kwargs = {"directory_path": directory_path} if directory_path is not None else {}
+        return run_async(_execute_tool_with_hooks(
+            "list_directory",
+            lambda: list_directory_raw(directory_path),
+            kwargs
+        ))
     return list_directory_raw(directory_path)
 
 @function_tool
 def get_file_info(file_path: str) -> str:
     """Get detailed information about a file."""
     capture_args("get_file_info", file_path=file_path)
+    if HOOKS_AVAILABLE:
+        return run_async(_execute_tool_with_hooks(
+            "get_file_info",
+            lambda: get_file_info_raw(file_path),
+            {"file_path": file_path}
+        ))
     return get_file_info_raw(file_path)
 
 @function_tool
@@ -561,21 +685,126 @@ def edit_file(file_path: str, old_str: str, new_str: str) -> str:
         - Hidden whitespace: Copy exactly from read_file output
     """
     capture_args("edit_file", file_path=file_path, old_str=old_str, new_str=new_str)
+    if HOOKS_AVAILABLE:
+        return run_async(_execute_tool_with_hooks(
+            "edit_file",
+            lambda: edit_file_raw(file_path, old_str, new_str),
+            {"file_path": file_path, "old_str": old_str, "new_str": new_str}
+        ))
     return edit_file_raw(file_path, old_str, new_str)
 
 
 # Export all tools for the agent
-def get_nano_agent_tools():
+def get_nano_agent_tools(permissions=None):
     """
-    Get all tools for the nano agent.
+    Get all tools for the nano agent with optional permission enforcement.
+    
+    Args:
+        permissions: Optional ToolPermissions object to enforce restrictions
     
     Returns:
         List of tool functions decorated with @function_tool
     """
-    return [
-        read_file,
-        write_file,
-        list_directory,
-        get_file_info,
-        edit_file
-    ]
+    if permissions is None:
+        # No restrictions - return all tools
+        return [
+            read_file,
+            write_file,
+            list_directory,
+            get_file_info,
+            edit_file
+        ]
+    
+    # Create permission-aware wrapper functions
+    tools = []
+    
+    # Define base tools and their names
+    available_tools = {
+        "read_file": read_file,
+        "write_file": write_file,
+        "list_directory": list_directory,
+        "get_file_info": get_file_info,
+        "edit_file": edit_file
+    }
+    
+    for tool_name, tool_func in available_tools.items():
+        # Check if tool is allowed
+        allowed, reason = permissions.check_tool_permission(tool_name)
+        if allowed:
+            # Create a permission-aware wrapper
+            wrapped_tool = _create_permission_wrapper(tool_name, tool_func, permissions)
+            tools.append(wrapped_tool)
+        # If not allowed, simply don't include the tool
+    
+    return tools
+
+
+def _create_permission_wrapper(tool_name: str, original_tool, permissions):
+    """Create a permission-aware wrapper for a tool function.
+    
+    Args:
+        tool_name: Name of the tool
+        original_tool: The original tool function
+        permissions: ToolPermissions object
+        
+    Returns:
+        Wrapped tool function with permission checks
+    """
+    # Create specific wrappers for each tool type to avoid OpenAI SDK issues
+    if tool_name == "read_file":
+        @function_tool
+        def read_file_permission_wrapper(file_path: str) -> str:
+            """Read the contents of a file (with permission checks)."""
+            allowed, reason = permissions.check_tool_permission("read_file", {"file_path": file_path})
+            if not allowed:
+                return f"Permission denied: {reason}"
+            return read_file_raw(file_path)
+        return read_file_permission_wrapper
+    
+    elif tool_name == "write_file":
+        @function_tool
+        def write_file_permission_wrapper(file_path: str, content: str) -> str:
+            """Write content to a file (with permission checks)."""
+            allowed, reason = permissions.check_tool_permission("write_file", {"file_path": file_path})
+            if not allowed:
+                return f"Permission denied: {reason}"
+            return write_file_raw(file_path, content)
+        return write_file_permission_wrapper
+    
+    elif tool_name == "list_directory":
+        @function_tool
+        def list_directory_permission_wrapper(directory_path: Optional[str] = None) -> str:
+            """List contents of a directory (with permission checks)."""
+            args = {"directory_path": directory_path} if directory_path is not None else {}
+            allowed, reason = permissions.check_tool_permission("list_directory", args)
+            if not allowed:
+                return f"Permission denied: {reason}"
+            return list_directory_raw(directory_path)
+        return list_directory_permission_wrapper
+    
+    elif tool_name == "get_file_info":
+        @function_tool
+        def get_file_info_permission_wrapper(file_path: str) -> str:
+            """Get detailed information about a file (with permission checks)."""
+            allowed, reason = permissions.check_tool_permission("get_file_info", {"file_path": file_path})
+            if not allowed:
+                return f"Permission denied: {reason}"
+            return get_file_info_raw(file_path)
+        return get_file_info_permission_wrapper
+    
+    elif tool_name == "edit_file":
+        @function_tool
+        def edit_file_permission_wrapper(file_path: str, old_str: str, new_str: str) -> str:
+            """Edit a file by replacing exact text (with permission checks)."""
+            allowed, reason = permissions.check_tool_permission("edit_file", {"file_path": file_path})
+            if not allowed:
+                return f"Permission denied: {reason}"
+            return edit_file_raw(file_path, old_str, new_str)
+        return edit_file_permission_wrapper
+    
+    else:
+        # Fallback - should not happen
+        @function_tool
+        def unknown_tool_wrapper():
+            return f"Error: Unknown tool '{tool_name}'"
+        return unknown_tool_wrapper

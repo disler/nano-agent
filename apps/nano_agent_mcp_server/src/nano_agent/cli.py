@@ -12,6 +12,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.syntax import Syntax
 from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.table import Table
 from pathlib import Path
 import os
 import sys
@@ -22,14 +23,17 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from .modules.nano_agent import prompt_nano_agent, _execute_nano_agent
-from .modules.data_types import PromptNanoAgentRequest
+from .modules.data_types import PromptNanoAgentRequest, ChatMessage
 from .modules.constants import (
     DEFAULT_MODEL,
     DEFAULT_PROVIDER,
     ERROR_NO_API_KEY,
-    DEMO_PROMPTS
+    DEMO_PROMPTS,
+    DEFAULT_TEMPERATURE,
+    MAX_TOKENS
 )
 from .modules.command_loader import CommandLoader, parse_command_syntax
+from .modules.session_manager import SessionManager
 
 app = typer.Typer()
 console = Console()
@@ -96,7 +100,15 @@ def run(
     agent: str = typer.Option(None, help="Agent personality to use"),
     api_base: str = typer.Option(None, help="API base URL (overrides environment variables)"),
     api_key: str = typer.Option(None, help="API key (overrides environment variables)"),
-    verbose: bool = typer.Option(False, help="Show detailed output")
+    verbose: bool = typer.Option(False, help="Show detailed output"),
+    # Claude-inspired options
+    continue_session: bool = typer.Option(False, "--continue", "-c", help="Continue the last session"),
+    session: str = typer.Option(None, "--session", "-s", help="Use a specific session ID"),
+    new_session: bool = typer.Option(False, "--new", "-n", help="Force a new session"),
+    temperature: float = typer.Option(None, "--temperature", "-t", help="Model temperature (0.0-2.0)"),
+    max_tokens: int = typer.Option(None, "--max-tokens", help="Maximum response tokens"),
+    no_rich: bool = typer.Option(False, "--no-rich", help="Disable rich formatting"),
+    save: bool = typer.Option(True, "--save/--no-save", help="Save conversation to session history")
 ):
     """Run the nano agent with a prompt. Supports /command syntax for command files."""
     check_api_key()
@@ -121,6 +133,41 @@ def run(
         model = DEFAULT_MODEL
     if provider is None:
         provider = DEFAULT_PROVIDER
+    
+    # Session management (Claude-inspired feature)
+    session_manager = SessionManager()
+    chat_history = []
+    
+    if continue_session and not new_session:
+        # Continue the last session
+        last_session = session_manager.get_last_session()
+        if last_session:
+            console.print(f"[dim]Continuing session: {last_session.session_id}[/dim]")
+            chat_history = session_manager.get_conversation_context()
+            # Use session's model/provider if not overridden
+            if model == DEFAULT_MODEL:
+                model = last_session.model
+            if provider == DEFAULT_PROVIDER:
+                provider = last_session.provider
+    elif session and not new_session:
+        # Load specific session
+        loaded_session = session_manager.load_session(session)
+        if loaded_session:
+            console.print(f"[dim]Loaded session: {session}[/dim]")
+            chat_history = session_manager.get_conversation_context()
+            # Use session's model/provider if not overridden
+            if model == DEFAULT_MODEL:
+                model = loaded_session.model
+            if provider == DEFAULT_PROVIDER:
+                provider = loaded_session.provider
+        else:
+            console.print(f"[yellow]Warning: Session '{session}' not found, starting new session[/yellow]")
+    
+    if save and session_manager.current_session is None:
+        # Create new session if saving and no session loaded
+        session_manager.create_session(provider, model)
+        if session_manager.current_session:
+            console.print(f"[dim]Created session: {session_manager.current_session.session_id}[/dim]")
     
     # Check if this is a command syntax
     command_name, arguments = parse_command_syntax(prompt)
@@ -155,11 +202,14 @@ def run(
         provider=provider,
         agent_name=agent,
         api_base=api_base,
-        api_key=api_key
+        api_key=api_key,
+        chat_history=chat_history if chat_history else None,
+        temperature=temperature if temperature is not None else DEFAULT_TEMPERATURE,
+        max_tokens=max_tokens if max_tokens is not None else MAX_TOKENS
     )
     
     # Execute agent without progress spinner (rich logging will show progress)
-    response = _execute_nano_agent(request)
+    response = _execute_nano_agent(request, enable_rich_logging=not no_rich)
     
     # Display results in panels
     if response.success:
@@ -169,6 +219,15 @@ def run(
             border_style="green",
             expand=False
         ))
+        
+        # Save to session if enabled
+        if save and session_manager.current_session:
+            session_manager.add_exchange(
+                final_prompt,
+                response.result,
+                response.metadata
+            )
+            console.print(f"[dim]Session saved: {session_manager.current_session.session_id}[/dim]")
         
         if verbose:
             # Format metadata as a single JSON object
@@ -212,6 +271,83 @@ def run(
                 border_style="dim",
                 expand=False
             ))
+
+@app.command()
+def sessions(
+    action: str = typer.Argument("list", help="Action to perform: list, show, clear"),
+    session_id: str = typer.Option(None, "--id", help="Session ID for 'show' action"),
+    days: int = typer.Option(30, "--days", help="Days to keep for 'clear' action")
+):
+    """Manage conversation sessions (Claude-inspired feature)."""
+    session_manager = SessionManager()
+    
+    if action == "list":
+        # List recent sessions
+        sessions = session_manager.get_recent_sessions(limit=20)
+        if not sessions:
+            console.print("[yellow]No sessions found.[/yellow]")
+            return
+            
+        table = Table(title="Recent Sessions")
+        table.add_column("Session ID", style="cyan")
+        table.add_column("Created", style="green")
+        table.add_column("Last Updated", style="yellow")
+        table.add_column("Provider/Model", style="magenta")
+        table.add_column("Messages", style="blue")
+        
+        for session in sessions:
+            created = session["created_at"].split("T")[0] if "T" in session["created_at"] else session["created_at"]
+            updated = session["last_updated"].split("T")[0] if "T" in session["last_updated"] else session["last_updated"]
+            model_info = f"{session['provider']}/{session['model']}"
+            table.add_row(
+                session["session_id"],
+                created,
+                updated,
+                model_info,
+                str(session.get("message_count", 0))
+            )
+        
+        console.print(table)
+        console.print(f"\n[dim]Use 'nano-cli run --continue' to resume the last session[/dim]")
+        console.print(f"[dim]Use 'nano-cli sessions show --id <session_id>' to view a specific session[/dim]")
+        
+    elif action == "show":
+        # Show a specific session
+        if not session_id:
+            console.print("[red]Error: --id required for 'show' action[/red]")
+            return
+            
+        session = session_manager.load_session(session_id)
+        if not session:
+            console.print(f"[red]Session '{session_id}' not found[/red]")
+            return
+            
+        console.print(Panel(
+            f"[cyan]Session: {session.session_id}[/cyan]\n"
+            f"Created: {session.created_at}\n"
+            f"Provider: {session.provider} | Model: {session.model}\n"
+            f"Messages: {len(session.conversation)}",
+            title="Session Details",
+            expand=False
+        ))
+        
+        # Display conversation history
+        for i, msg in enumerate(session.conversation):
+            if msg.role == "user":
+                console.print(f"\n[blue]👤 User:[/blue]")
+                console.print(msg.content[:500] + "..." if len(msg.content) > 500 else msg.content)
+            elif msg.role == "assistant":
+                console.print(f"\n[green]🤖 Assistant:[/green]")
+                console.print(msg.content[:500] + "..." if len(msg.content) > 500 else msg.content)
+                
+    elif action == "clear":
+        # Clear old sessions
+        deleted = session_manager.clear_old_sessions(days=days)
+        console.print(f"[green]Cleared {deleted} sessions older than {days} days[/green]")
+        
+    else:
+        console.print(f"[red]Unknown action: {action}[/red]")
+        console.print("Available actions: list, show, clear")
 
 @app.command()
 def demo():

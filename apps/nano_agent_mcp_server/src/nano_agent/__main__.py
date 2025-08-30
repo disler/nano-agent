@@ -11,8 +11,15 @@ from mcp.server.fastmcp import FastMCP
 # Load environment variables from .env file
 load_dotenv()
 
-# Import our nano agent tool
+# Import our nano agent tool and additional MCP tools
 from .modules.nano_agent import prompt_nano_agent
+from .mcp_tools import (
+    get_session_info,
+    list_sessions,
+    clear_old_sessions,
+    get_available_models,
+    get_server_capabilities
+)
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -28,17 +35,31 @@ mcp = FastMCP(
     allowing clients to describe work in plain English and have it completed by
     an AI agent with access to file system tools.
     
-    The agent can read files, create files, and perform complex multi-step tasks
-    autonomously, making it ideal for code generation, data processing, and
-    automation workflows.
+    Features:
+    - Multi-provider LLM support (OpenAI, Anthropic, Ollama)
+    - Conversation persistence across sessions
+    - Fine-grained tool and path permissions
+    - Read-only mode for safe exploration
+    - Hooks system for customization
+    - Temperature and token limit control
     
-    Main tool:
-    - prompt_nano_agent: Execute an autonomous agent with a natural language task description
+    Main tools:
+    - prompt_nano_agent: Execute autonomous agent with full configuration options
+    - get_session_info: Get information about a specific session
+    - list_sessions: List all sessions for the client
+    - clear_old_sessions: Clean up old session data
+    - get_available_models: List available models and providers
+    - get_server_capabilities: Get server features and limitations
     """
 )
 
-# Register the nano agent tool
+# Register all tools
 mcp.tool()(prompt_nano_agent)
+mcp.tool()(get_session_info)
+mcp.tool()(list_sessions)
+mcp.tool()(clear_old_sessions)
+mcp.tool()(get_available_models)
+mcp.tool()(get_server_capabilities)
 
 
 def run():

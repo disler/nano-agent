@@ -1,0 +1,119 @@
+{
+  "version": "1.0",
+  "enabled": true,
+  "timeout_seconds": 5,
+  "parallel_execution": true,
+  "hooks": {
+    "pre_agent_start": [
+      {
+        "name": "prompt_filter",
+        "command": "python3 ~/.nano-cli/hooks/prompt_filter.py",
+        "blocking": true,
+        "timeout": 2,
+        "enabled": true,
+        "contexts": ["cli", "mcp"]
+      }
+    ],
+    "post_agent_complete": [
+      {
+        "name": "performance_monitor",
+        "command": "python3 ~/.nano-cli/hooks/performance_monitor.py",
+        "blocking": false,
+        "timeout": 5,
+        "enabled": true,
+        "contexts": ["cli", "mcp"]
+      }
+    ],
+    "agent_error": [
+      {
+        "name": "error_logger",
+        "command": "python3 ~/.nano-cli/hooks/performance_monitor.py",
+        "blocking": false,
+        "timeout": 2,
+        "enabled": true,
+        "contexts": ["cli", "mcp"]
+      }
+    ],
+    "pre_tool_use": [
+      {
+        "name": "security_check",
+        "command": "python3 ~/.nano-cli/hooks/security_check.py",
+        "blocking": true,
+        "timeout": 2,
+        "enabled": true,
+        "contexts": ["cli", "mcp"],
+        "matcher": {
+          "tool": ["write_file", "edit_file"]
+        }
+      },
+      {
+        "name": "tool_logger",
+        "command": "~/.nano-cli/hooks/log_tool_usage.sh",
+        "blocking": false,
+        "timeout": 1,
+        "enabled": true,
+        "contexts": ["cli", "mcp"]
+      }
+    ],
+    "post_tool_use": [
+      {
+        "name": "tool_logger",
+        "command": "~/.nano-cli/hooks/log_tool_usage.sh",
+        "blocking": false,
+        "timeout": 1,
+        "enabled": true,
+        "contexts": ["cli", "mcp"]
+      }
+    ],
+    "tool_error": [
+      {
+        "name": "tool_error_logger",
+        "command": "~/.nano-cli/hooks/log_tool_usage.sh",
+        "blocking": false,
+        "timeout": 1,
+        "enabled": true,
+        "contexts": ["cli", "mcp"]
+      }
+    ],
+    "mcp_request_received": [
+      {
+        "name": "mcp_rate_limiter",
+        "command": "python3 ~/.nano-cli/hooks/prompt_filter.py",
+        "blocking": true,
+        "timeout": 2,
+        "enabled": true,
+        "contexts": ["mcp"]
+      }
+    ],
+    "mcp_response_ready": [
+      {
+        "name": "mcp_response_logger",
+        "command": "echo '[MCP Response]' >> ~/.nano-cli/logs/mcp.log",
+        "blocking": false,
+        "timeout": 1,
+        "enabled": false,
+        "contexts": ["mcp"]
+      }
+    ],
+    "user_prompt_submit": [
+      {
+        "name": "prompt_enhancer",
+        "command": "python3 ~/.nano-cli/hooks/prompt_filter.py",
+        "blocking": false,
+        "timeout": 2,
+        "enabled": false,
+        "contexts": ["cli"]
+      }
+    ],
+    "agent_response": [
+      {
+        "name": "response_logger",
+        "command": "echo 'Response received' >> ~/.nano-cli/logs/responses.log",
+        "blocking": false,
+        "timeout": 1,
+        "enabled": false,
+        "contexts": ["cli", "mcp"]
+      }
+    ]
+  }
+}

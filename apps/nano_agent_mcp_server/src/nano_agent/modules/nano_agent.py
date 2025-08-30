@@ -27,11 +27,22 @@ from rich.text import Text
 # Token tracking
 from .token_tracking import TokenTracker, format_token_count, format_cost
 
+# Hook support
+try:
+    from .hook_manager import get_hook_manager
+    from .hook_types import HookEvent, HookEventData
+    HOOKS_AVAILABLE = True
+except ImportError:
+    HOOKS_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.debug("Hooks not available (hook modules not found)")
+
 from .data_types import (
     PromptNanoAgentRequest,
     PromptNanoAgentResponse,
     AgentConfig,
-    AgentExecution
+    AgentExecution,
+    ToolPermissions
 )
 
 from .constants import (
@@ -303,6 +314,37 @@ async def _execute_nano_agent_async(request: PromptNanoAgentRequest, enable_rich
     """
     start_time = time.time()
     
+    # Trigger pre-agent start hook if available
+    if HOOKS_AVAILABLE:
+        try:
+            hook_manager = get_hook_manager()
+            event_data = HookEventData(
+                event="pre_agent_start",
+                timestamp=datetime.now().isoformat(),
+                context=hook_manager.context,
+                working_dir=os.getcwd(),
+                model=request.model,
+                provider=request.provider,
+                temperature=request.temperature,
+                max_tokens=request.max_tokens,
+                prompt=request.agentic_prompt
+            )
+            
+            pre_result = await hook_manager.trigger_hook(
+                HookEvent.PRE_AGENT_START,
+                event_data,
+                blocking=True
+            )
+            
+            if pre_result.blocked:
+                return PromptNanoAgentResponse(
+                    success=False,
+                    error=pre_result.blocking_reason or "Agent execution blocked by hook",
+                    execution_time_seconds=time.time() - start_time
+                )
+        except Exception as e:
+            logger.warning(f"Error in pre-agent hook: {e}")
+    
     try:
         logger.info(f"Executing nano agent with Agent SDK: {request.agentic_prompt[:100]}...")
         logger.debug(f"Model: {request.model}, Provider: {request.provider}")
@@ -324,13 +366,22 @@ async def _execute_nano_agent_async(request: PromptNanoAgentRequest, enable_rich
         # Setup provider-specific configurations
         ProviderConfig.setup_provider(request.provider)
         
-        # Get tools for the agent
-        tools = get_nano_agent_tools()
+        # Create tool permissions from request
+        permissions = ToolPermissions(
+            allowed_tools=request.allowed_tools,
+            blocked_tools=request.blocked_tools,
+            allowed_paths=request.allowed_paths,
+            blocked_paths=request.blocked_paths,
+            read_only=request.read_only
+        )
+        
+        # Get tools for the agent with permission system
+        tools = get_nano_agent_tools(permissions=permissions)
         
         # Configure model settings based on model capabilities
         base_settings = {
-            "temperature": DEFAULT_TEMPERATURE,
-            "max_tokens": MAX_TOKENS
+            "temperature": request.temperature if request.temperature is not None else DEFAULT_TEMPERATURE,
+            "max_tokens": request.max_tokens if request.max_tokens is not None else MAX_TOKENS
         }
         
         # Get filtered settings for the specific model
@@ -429,11 +480,36 @@ async def _execute_nano_agent_async(request: PromptNanoAgentRequest, enable_rich
         
         logger.info(f"Agent completed successfully in {execution_time:.2f}s")
         
+        # Trigger post-agent complete hook if available
+        if HOOKS_AVAILABLE:
+            try:
+                hook_manager = get_hook_manager()
+                event_data = HookEventData(
+                    event="post_agent_complete",
+                    timestamp=datetime.now().isoformat(),
+                    context=hook_manager.context,
+                    working_dir=os.getcwd(),
+                    model=request.model,
+                    provider=request.provider,
+                    prompt=request.agentic_prompt,
+                    agent_response=final_output,
+                    token_usage=metadata.get("token_usage"),
+                    execution_time=execution_time
+                )
+                
+                await hook_manager.trigger_hook(
+                    HookEvent.POST_AGENT_COMPLETE,
+                    event_data
+                )
+            except Exception as e:
+                logger.warning(f"Error in post-agent hook: {e}")
+        
         return PromptNanoAgentResponse(
             success=True,
             result=final_output,
             metadata=metadata,
-            execution_time_seconds=execution_time
+            execution_time_seconds=execution_time,
+            permissions_used=permissions
         )
         
     except Exception as e:
@@ -441,6 +517,29 @@ async def _execute_nano_agent_async(request: PromptNanoAgentRequest, enable_rich
         full_traceback = traceback.format_exc()
         logger.error(f"Agent SDK execution failed: {str(e)}\nFull traceback:\n{full_traceback}")
         execution_time = time.time() - start_time
+        
+        # Trigger agent error hook if available
+        if HOOKS_AVAILABLE:
+            try:
+                hook_manager = get_hook_manager()
+                event_data = HookEventData(
+                    event="agent_error",
+                    timestamp=datetime.now().isoformat(),
+                    context=hook_manager.context,
+                    working_dir=os.getcwd(),
+                    model=request.model,
+                    provider=request.provider,
+                    prompt=request.agentic_prompt,
+                    error=str(e),
+                    execution_time=execution_time
+                )
+                
+                await hook_manager.trigger_hook(
+                    HookEvent.AGENT_ERROR,
+                    event_data
+                )
+            except Exception as hook_error:
+                logger.warning(f"Error in agent error hook: {hook_error}")
         
         return PromptNanoAgentResponse(
             success=False,
@@ -493,8 +592,8 @@ def _execute_nano_agent(request: PromptNanoAgentRequest, enable_rich_logging: bo
         
         # Configure model settings based on model capabilities
         base_settings = {
-            "temperature": DEFAULT_TEMPERATURE,
-            "max_tokens": MAX_TOKENS
+            "temperature": request.temperature if request.temperature is not None else DEFAULT_TEMPERATURE,
+            "max_tokens": request.max_tokens if request.max_tokens is not None else MAX_TOKENS
         }
         
         # Get filtered settings for the specific model
@@ -513,11 +612,20 @@ def _execute_nano_agent(request: PromptNanoAgentRequest, enable_rich_logging: bo
                 system_prompt = agent_loader.get_extended_system_prompt(NANO_AGENT_SYSTEM_PROMPT)
                 logger.info(f"Using extended system prompt with agent: {request.agent_name}")
         
+        # Create tool permissions from request
+        permissions = ToolPermissions(
+            allowed_tools=request.allowed_tools,
+            blocked_tools=request.blocked_tools,
+            allowed_paths=request.allowed_paths,
+            blocked_paths=request.blocked_paths,
+            read_only=request.read_only
+        )
+        
         # Create agent with provider-specific configuration
         agent = ProviderConfig.create_agent(
             name="NanoAgent",
             instructions=system_prompt,
-            tools=get_nano_agent_tools(),
+            tools=get_nano_agent_tools(permissions=permissions),
             model=request.model,
             provider=request.provider,
             model_settings=model_settings,
@@ -636,7 +744,8 @@ def _execute_nano_agent(request: PromptNanoAgentRequest, enable_rich_logging: bo
             success=True,
             result=final_output,
             metadata=metadata,
-            execution_time_seconds=execution_time
+            execution_time_seconds=execution_time,
+            permissions_used=permissions
         )
         
         logger.info(f"Agent SDK execution completed successfully in {execution_time:.2f} seconds")
@@ -664,6 +773,16 @@ async def prompt_nano_agent(
     agentic_prompt: str,
     model: str = DEFAULT_MODEL,
     provider: str = DEFAULT_PROVIDER,
+    temperature: Optional[float] = None,
+    max_tokens: Optional[int] = None,
+    allowed_tools: Optional[List[str]] = None,
+    blocked_tools: Optional[List[str]] = None,
+    allowed_paths: Optional[List[str]] = None,
+    blocked_paths: Optional[List[str]] = None,
+    read_only: bool = False,
+    # Session management
+    session_id: Optional[str] = None,
+    clear_history: bool = False,
     ctx: Any = None  # Context will be injected by FastMCP when registered
 ) -> Dict[str, Any]:
     """
@@ -695,6 +814,32 @@ async def prompt_nano_agent(
                  - "anthropic": Anthropic's Claude models via LiteLLM
                  - "ollama": Local models via Ollama
         
+        temperature: Model temperature (0.0-2.0). Controls randomness in responses.
+                    Lower values = more focused, higher values = more creative.
+        
+        max_tokens: Maximum number of tokens in the response. Controls output length.
+        
+        allowed_tools: List of tools the agent is allowed to use (whitelist).
+                      Example: ["read_file", "list_directory"]
+        
+        blocked_tools: List of tools the agent cannot use (blacklist).
+                      Example: ["write_file", "edit_file"]
+        
+        allowed_paths: List of path patterns the agent can access (whitelist).
+                      Example: ["./src", "/tmp/sandbox"]
+        
+        blocked_paths: List of path patterns the agent cannot access (blacklist).
+                      Example: ["/etc", "~/.ssh", "/System"]
+        
+        read_only: If True, disables all write operations (write_file, edit_file).
+                  Useful for safe exploration and analysis tasks.
+        
+        session_id: Optional session ID to continue a conversation. If provided,
+                   the agent will have access to previous conversation context.
+        
+        clear_history: If True, clears the conversation history for the session.
+                      Useful for starting fresh while keeping session settings.
+        
         ctx: MCP context (automatically injected)
     
     Returns:
@@ -718,6 +863,95 @@ async def prompt_nano_agent(
         {"success": True, "result": "Created schema.md with 15 JSON schemas analyzed"}
     """
     try:
+        # Initialize MCP session manager if in MCP context
+        mcp_session = None
+        chat_history = []
+        client_id = "unknown"
+        
+        if ctx:
+            # Get client identifier from context
+            client_id = getattr(ctx, 'client_id', None) or getattr(ctx, 'client_name', None) or "mcp-client"
+            
+            # Initialize session manager
+            from .mcp_session_manager import MCPSessionManager
+            session_manager = MCPSessionManager()
+            
+            # Get or create session
+            mcp_session = await session_manager.get_or_create_session(
+                client_id=client_id,
+                session_id=session_id,
+                create_new=clear_history
+            )
+            
+            # Clear history if requested
+            if clear_history:
+                mcp_session.conversation = []
+            
+            # Get conversation context
+            if not clear_history and mcp_session.conversation:
+                chat_history = await session_manager.get_conversation_context(
+                    client_id=client_id,
+                    session_id=mcp_session.session_id,
+                    max_messages=20
+                )
+            
+            # Apply session settings if not overridden
+            if model == DEFAULT_MODEL and mcp_session.model:
+                model = mcp_session.model
+            if provider == DEFAULT_PROVIDER and mcp_session.provider:
+                provider = mcp_session.provider
+            if temperature is None and mcp_session.temperature is not None:
+                temperature = mcp_session.temperature
+            if max_tokens is None and mcp_session.max_tokens is not None:
+                max_tokens = mcp_session.max_tokens
+            
+            # Apply session permissions if not overridden
+            if allowed_tools is None and mcp_session.allowed_tools:
+                allowed_tools = mcp_session.allowed_tools
+            if blocked_tools is None and mcp_session.blocked_tools:
+                blocked_tools = mcp_session.blocked_tools
+            if allowed_paths is None and mcp_session.allowed_paths:
+                allowed_paths = mcp_session.allowed_paths
+            if blocked_paths is None and mcp_session.blocked_paths:
+                blocked_paths = mcp_session.blocked_paths
+            if not read_only and mcp_session.read_only:
+                read_only = mcp_session.read_only
+        
+        # Trigger MCP request received hook if available
+        if HOOKS_AVAILABLE and ctx:
+            try:
+                hook_manager = get_hook_manager()
+                # Get MCP client info if available from context
+                mcp_client = getattr(ctx, 'client_id', None) or getattr(ctx, 'client_name', None) or "mcp-client"
+                mcp_request_id = getattr(ctx, 'request_id', None) or str(id(ctx))
+                
+                event_data = HookEventData(
+                    event="mcp_request_received",
+                    timestamp=datetime.now().isoformat(),
+                    context="mcp",  # Force MCP context
+                    working_dir=os.getcwd(),
+                    model=model,
+                    provider=provider,
+                    prompt=agentic_prompt,
+                    mcp_client=mcp_client,
+                    mcp_request_id=mcp_request_id
+                )
+                
+                pre_result = await hook_manager.trigger_hook(
+                    HookEvent.MCP_REQUEST_RECEIVED,
+                    event_data,
+                    blocking=True
+                )
+                
+                if pre_result.blocked:
+                    return {
+                        "success": False,
+                        "error": pre_result.blocking_reason or "MCP request blocked by hook",
+                        "execution_time_seconds": 0.0
+                    }
+            except Exception as e:
+                logger.warning(f"Error in MCP request hook: {e}")
+        
         # Report progress if context is available
         if ctx:
             await ctx.report_progress(0.1, 1.0, "Initializing agent...")
@@ -726,7 +960,15 @@ async def prompt_nano_agent(
         request = PromptNanoAgentRequest(
             agentic_prompt=agentic_prompt,
             model=model,
-            provider=provider
+            provider=provider,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            allowed_tools=allowed_tools,
+            blocked_tools=blocked_tools,
+            allowed_paths=allowed_paths,
+            blocked_paths=blocked_paths,
+            read_only=read_only,
+            chat_history=chat_history
         )
         
         if ctx:
@@ -743,8 +985,73 @@ async def prompt_nano_agent(
             else:
                 await ctx.error(f"Agent failed: {response.error}")
         
+        # Trigger MCP response ready hook if available
+        if HOOKS_AVAILABLE and ctx:
+            try:
+                hook_manager = get_hook_manager()
+                mcp_client = getattr(ctx, 'client_id', None) or getattr(ctx, 'client_name', None) or "mcp-client"
+                mcp_request_id = getattr(ctx, 'request_id', None) or str(id(ctx))
+                
+                event_data = HookEventData(
+                    event="mcp_response_ready",
+                    timestamp=datetime.now().isoformat(),
+                    context="mcp",  # Force MCP context
+                    working_dir=os.getcwd(),
+                    model=model,
+                    provider=provider,
+                    prompt=agentic_prompt,
+                    agent_response=response.result if response.success else response.error,
+                    mcp_client=mcp_client,
+                    mcp_request_id=mcp_request_id,
+                    execution_time=response.execution_time_seconds
+                )
+                
+                await hook_manager.trigger_hook(
+                    HookEvent.MCP_RESPONSE_READY,
+                    event_data
+                )
+            except Exception as e:
+                logger.warning(f"Error in MCP response hook: {e}")
+        
+        # Update session if in MCP context
+        if mcp_session and ctx:
+            try:
+                await session_manager.update_session(
+                    client_id=client_id,
+                    session_id=mcp_session.session_id,
+                    user_prompt=agentic_prompt,
+                    agent_response=response.result if response.success else response.error,
+                    metadata=response.metadata
+                )
+                
+                # Update session settings for future requests
+                await session_manager.update_session_settings(
+                    client_id=client_id,
+                    session_id=mcp_session.session_id,
+                    model=model,
+                    provider=provider,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    allowed_tools=allowed_tools,
+                    blocked_tools=blocked_tools,
+                    allowed_paths=allowed_paths,
+                    blocked_paths=blocked_paths,
+                    read_only=read_only
+                )
+            except Exception as e:
+                logger.warning(f"Error updating MCP session: {e}")
+        
+        # Add session info to response metadata
+        response_dict = response.model_dump()
+        if mcp_session:
+            response_dict["session_info"] = {
+                "session_id": mcp_session.session_id,
+                "message_count": len(mcp_session.conversation) + 2,  # +2 for current exchange
+                "client_id": client_id
+            }
+        
         # Convert response to dictionary for MCP protocol
-        return response.model_dump()
+        return response_dict
         
     except Exception as e:
         logger.error(f"Error in prompt_nano_agent: {str(e)}", exc_info=True)
