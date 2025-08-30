@@ -6,8 +6,8 @@ used across the nano agent codebase.
 """
 
 # Default Model Configuration
-DEFAULT_MODEL = "gpt-5-mini"  # Efficient, fast, good for most tasks
-DEFAULT_PROVIDER = "openai"
+DEFAULT_MODEL = "gpt-oss:20b"  # Local open-source model, efficient for most tasks
+DEFAULT_PROVIDER = "ollama"
 
 # Available Models by Provider
 AVAILABLE_MODELS = {
